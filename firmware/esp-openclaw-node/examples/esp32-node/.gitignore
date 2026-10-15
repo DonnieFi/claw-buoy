@@ -1,0 +1,7 @@
+build/
+build-*/
+managed_components/
+sdkconfig
+sdkconfig.claw-box
+sdkconfig.old
+sdkconfig.claw-box.old

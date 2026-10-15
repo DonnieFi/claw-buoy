@@ -1,0 +1,32 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "claw_box_display.c"
+        "claw_box_touch.c"
+        "esp_openclaw_node_example_aht20_node_cmd.c"
+        "esp_openclaw_node_example_adc_node_cmd.c"
+        "esp_openclaw_node_example_ble_node_cmd.c"
+        "esp_openclaw_node_example_cmd.c"
+        "esp_openclaw_node_example_gpio_node_cmd.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        esp-openclaw-node
+        esp-openclaw-node-provisioning
+        esp_adc
+        esp_lcd
+        esp_driver_spi
+        esp_timer
+        esp_driver_i2c
+        esp_app_format
+        console
+        esp_driver_ledc
+        esp_driver_gpio
+        esp_event
+        esp_netif
+        esp_wifi
+        bt
+        espressif__cjson
+        mbedtls
+        nvs_flash
+)

@@ -1,0 +1,18 @@
+CONFIG_CLAW_BOX_DISPLAY=y
+CONFIG_LV_USE_DEMO_WIDGETS=n
+# WROOM has no PSRAM. Allocate LVGL from heap rather than a 64KiB static pool.
+CONFIG_LV_USE_BUILTIN_MALLOC=n
+CONFIG_LV_USE_CLIB_MALLOC=y
+# Make room for Bluetooth + LCD in ESP32 IRAM; retain Wi-Fi functionality.
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+
+# Six static RX buffers match the default six-frame Block Ack window.
+# Frees about 6.4KB for JSON handshake parsing on the no-PSRAM WROOM.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+
+CONFIG_LV_FONT_MONTSERRAT_24=y
+
+# Report rendering/allocation faults while diagnosing blank pages.
+CONFIG_LV_USE_LOG=y
+CONFIG_LV_LOG_LEVEL_WARN=y

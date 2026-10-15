@@ -1,0 +1,66 @@
+# Local-only archive of old enclosure versions, v1 print jobs and old firmware builds
+/old/
+
+# ESP-IDF build output
+build/
+build-*/
+managed_components/
+sdkconfig.old
+*.bin
+*.elf
+*.map
+
+# Python / editor / OS
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Archives (the v5 print files are already in the repo)
+*.zip
+
+# Private device snapshots, backups, builds and live-test evidence (never publish)
+/firmware/releases/
+/firmware/backups/
+/firmware/builds/
+/docs/local-ux-v8/
+/docs/overnight-*/
+/docs/touch-response-*/
+/docs/reviews/
+/docs/family-buoy-screens.md
+/docs/office-buoy-artifacts.md
+/design/storyboards/
+/design/renders/claw-mascot-reference.png
+/public-candidate*/
+
+# Machine-specific ESP-IDF config; portable sdkconfig.*.defaults stay public
+sdkconfig
+sdkconfig.claw-box
+sdkconfig.ci
+sdkconfig.*.old
+sdkconfig.h
+compile_commands.json
+flasher_args.json
+flash_args
+
+# Provisioning, credentials, local environment and recordings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.nvs
+*.log
+*.pcap
+*.pcapng
+*credentials*.json
+*secrets*.json
+*pre-flash-state*.json
+
+# Private per-device action prompts and delivery targets
+private_buoy_config.h

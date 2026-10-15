@@ -1,0 +1,36 @@
+name: Public source checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run hardware-independent UI and touch tests
+        run: python3 tools/public_checks.py
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned secret scanner
+        run: go install github.com/zricethezav/gitleaks/v8@v8.24.3
+      - name: Scan reachable public history (redacted)
+        run: |
+          "$(go env GOPATH)/bin/gitleaks" git --redact=100 --log-opts=--all .
+  firmware:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.4.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the no-PSRAM ESP32 board configuration
+        shell: bash
+        working-directory: firmware/esp-openclaw-node/examples/esp32-node
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py -B build-claw-box -D SDKCONFIG=sdkconfig.claw-box -D 'SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.claw-box.defaults' build
