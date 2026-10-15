@@ -7,7 +7,11 @@
 
 static inline int buoy_next_page(int page, int pixel_x) { return (page + (pixel_x >= 160 ? 1 : 2)) % 3; }
 static inline int buoy_alarm_step(int minute, int delta) { return (minute + delta + 1440) % 1440; }
-static inline int buoy_dark_hour(int hour) { return hour >= 22 || hour < 7; }
+#include "buoy_site_config.h"
+static inline int buoy_dark_hour(int hour) {
+    const int start = BUOY_DARK_START_HOUR, end = BUOY_DARK_END_HOUR;
+    return start == end ? 0 : (start < end ? (hour >= start && hour < end) : (hour >= start || hour < end));
+}
 static inline int buoy_axis(int raw,int first,int last,int low,int high) { return last==first ? -1 : low+(raw-first)*(high-low)/(last-first); }
 static inline int buoy_in_rect(int x,int y,int x0,int y0,int x1,int y1) { return x>=x0&&x<=x1&&y>=y0&&y<=y1; }
 

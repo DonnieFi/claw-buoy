@@ -1,14 +1,14 @@
-# 🦞 claw-buoy
+# 🦞 Claw Buoy
 
 **Your OpenClaw agent, out of the chat window and onto your desk.**
 
 A small ESP32 desk companion with a 2.8-inch touchscreen, a claw mascot, room temperature/humidity, a clock, weather, notifications, and local alarm/ping controls. It connects to [OpenClaw](https://github.com/openclaw/openclaw) using [ESP OpenClaw Node](https://github.com/openclaw/esp-openclaw-node).
 
-![Donnie and the OpenClaw desk companion on the dock](assets/lobster-trap-hero-v4.jpg)
+![Donnie and the OpenClaw desk companion on the dock](assets/claw-buoy-hero-v4.jpg)
 
 *Generated hero illustration featuring the project creator; concept hardware and screen, not a product photograph. Badge artwork does not override component licenses.*
 
-![A day with Office Buoy: eight-panel screen storyboard](assets/office-buoy-comic-v1.png)
+![A day with Claw Buoy: eight-panel screen storyboard](assets/claw-buoy-comic-v1.png)
 
 *Generated concept storyboard with demo content, not screenshots of V8. See [artwork notes](assets/README.md).*
 
@@ -20,9 +20,9 @@ A small ESP32 desk companion with a 2.8-inch touchscreen, a claw mascot, room te
 - Hero, comic storyboard and selected concept renders; not measured hardware photographs.
 - [OpenClaw integration and upstream change inventory](docs/openclaw-integration.md).
 
-![Enclosure v5 concept render](hardware/enclosure/v5/preview.png)
+![Enclosure v5 CAD geometry preview](hardware/enclosure/v5/preview.png)
 
-This repository is initially published **private**. Public redistribution and artwork rights still need review before changing visibility.
+Artwork provenance and redistribution scope are documented in [artwork notes](assets/README.md).
 
 ## Project status
 
@@ -32,10 +32,12 @@ V8 is built, USB-flashed, and live-regression checked: touch-feedback rendering 
 
 ## Hardware and wiring
 
-- Freenove classic ESP32-WROOM board, no PSRAM, 4 MB flash. Confirm your exact board variant; **GPIO16 is reserved for this board's onboard RGB LED**.
-- 2.8-inch ILI9341 SPI TFT (320 × 240 landscape) with XPT2046 resistive touch and onboard backlight-switch circuitry.
-- AHT20 temperature/humidity breakout, I²C address `0x38`.
-- USB power, jumper wires, and a common ground.
+> **Affiliate disclosure:** As an Amazon Associate I earn from qualifying purchases. Part links below are amazon.ca search links with an affiliate tag; they do not pin an exact SKU, so check each listing against the specs.
+
+- [Freenove classic ESP32-WROOM board](https://www.amazon.ca/s?k=Freenove+ESP32+WROOM+board&tag=threelayerbra-20), no PSRAM, 4 MB flash. Confirm your exact board variant; **GPIO16 is reserved for this board's onboard RGB LED**.
+- [2.8-inch ILI9341 SPI TFT](https://www.amazon.ca/s?k=2.8+inch+ILI9341+SPI+TFT+touch+display+XPT2046&tag=threelayerbra-20) (320 × 240 landscape) with XPT2046 resistive touch and onboard backlight-switch circuitry.
+- [AHT20 temperature/humidity breakout](https://www.amazon.ca/s?k=AHT20+temperature+humidity+sensor+breakout+I2C&tag=threelayerbra-20), I²C address `0x38`.
+- USB power ([cable](https://www.amazon.ca/s?k=USB+data+cable&tag=threelayerbra-20), [supply](https://www.amazon.ca/s?k=5V+USB+power+adapter&tag=threelayerbra-20)), [jumper wires](https://www.amazon.ca/s?k=dupont+jumper+wires+female+to+female&tag=threelayerbra-20), and a common ground.
 
 These are **GPIO numbers**, not physical header positions. The authoritative definitions are in [`claw_box_display.h`](firmware/esp-openclaw-node/examples/esp32-node/main/claw_box_display.h).
 
@@ -80,6 +82,23 @@ The public candidate includes `dependencies.lock`; it records the resolved compo
 
 The public defaults contain no personal delivery targets or calendar rules. Ping test mode is enabled by default; real delivery requires deliberate local setup. To customize, create an untracked `private_buoy_config.h` beside the example's `CMakeLists.txt`; override the `BUOY_*` strings documented in [`buoy_site_config.h`](firmware/esp-openclaw-node/examples/esp32-node/main/buoy_site_config.h). Keep that file private. Configure your weather location/timezone and authorized calendar in the gateway agent, and explicitly configure any delivery target before enabling real pings. Never publish your locally built image: those overrides become embedded in it.
 
+### Local clock and controls
+
+Override `BUOY_TIMEZONE` (POSIX TZ format), `BUOY_DARK_START_HOUR`,
+`BUOY_DARK_END_HOUR`, `BUOY_PING_ONE_LABEL`, `BUOY_PING_TWO_LABEL` and
+`BUOY_ACTION_SESSION_KEY` in the ignored `private_buoy_config.h`. The default
+clock is UTC; dark hours are 22:00–07:00 local time (equal endpoints disable
+scheduled dimming). Halifax uses `"AST4ADT,M3.2.0,M11.1.0"`. Weather/agenda
+timezone configuration in the Gateway must agree with the device clock.
+
+### Hardware verification scope
+
+The GPIO table records the working prototype wiring: live AHT20 reads were
+verified on GPIO21/22; display/touch operation was checked, and moving only the
+ESP32 end of the display LED-control wire to GPIO17 produced physical darkness.
+GPIO16 remains reserved for the documented Freenove board. This does not
+validate other board variants, bare LED loads, enclosure dimensions or print fit.
+
 Run the hardware-independent regression checks with:
 
 ```bash
@@ -98,8 +117,12 @@ The geometry was checked, but the enclosure has **not** been slice-verified or p
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Keep live messages, calendars, credentials, device identities, logs, NVS dumps, and machine-specific configuration out of issues and pull requests.
 
-Publication is prepared locally using an allowlisted, history-free export; see the [release checklist](docs/public-release-checklist.md). Local release archives and live-test evidence are deliberately not public source.
+Source-only exports can be prepared with `tools/public_export.py`; local release archives and live-test evidence are not distributed.
 
 ## License and credits
 
 Project-owned materials use [MIT](LICENSE). The ESP OpenClaw Node snapshot retains its [Apache-2.0 license](firmware/esp-openclaw-node/LICENSE) and [upstream provenance](firmware/esp-openclaw-node/SNAPSHOT.md). The vendored jsmn parser retains its MIT notice. Registry dependencies retain their respective licenses; a source repository is not a license grant for upstream names, logos, or trademarks.
+
+---
+
+*As an Amazon Associate I earn from qualifying purchases. Hardware links in this repository are affiliate links; they cost you nothing extra.*

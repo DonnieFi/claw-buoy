@@ -15,9 +15,9 @@ from public_audit import ROOT, scan
 
 FIXED = [
     'README.md', 'LICENSE', '.gitignore', 'SECURITY.md', 'CONTRIBUTING.md',
-    'docs/public-release-checklist.md', 'docs/openclaw-integration.md',
+    'NOTICE', 'docs/openclaw-integration.md',
     'hardware/PARTS.md', 'assets/README.md',
-    'assets/lobster-trap-hero-v4.jpg', 'assets/office-buoy-comic-v1.png',
+    'assets/claw-buoy-hero-v4.jpg', 'assets/claw-buoy-comic-v1.png',
     '.github/workflows/public-ci.yml',
     'tools/public_audit.py', 'tools/public_export.py', 'tools/public_checks.py',
     'firmware/esp-openclaw-node/LICENSE',
@@ -43,8 +43,8 @@ PATTERNS = [
     APP + 'main/idf_component.yml', APP + 'main/*.c', APP + 'main/*.h',
     APP + 'tests/*.c', APP + 'tests/stubs/*.h',
     APP + 'tests/stubs/driver/*.h', APP + 'tests/stubs/freertos/*.h',
-    'design/renders/office-buoy-dot-concept-idle-v1.png',
-    'design/renders/office-buoy-message-v1.png',
+    'design/renders/claw-buoy-dot-concept-idle-v1.png',
+    'design/renders/claw-buoy-message-v1.png',
     'hardware/enclosure/v5/*.stl', 'hardware/enclosure/v5/*.scad',
     'hardware/enclosure/v5/*.py', 'hardware/enclosure/v5/preview.png',
     'hardware/enclosure/v5/AUDIT.md', 'hardware/enclosure/v5/README.txt',

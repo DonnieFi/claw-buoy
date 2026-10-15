@@ -1,0 +1,6 @@
+Claw Buoy
+
+Project-owned source is MIT licensed. Files under firmware/esp-openclaw-node/
+retain their individual/upstream licenses; see its LICENSE and SNAPSHOT.md.
+The vendored jsmn parser retains its MIT notice. Third-party names, logos and
+trademarks are not licensed by the project. See assets/README.md for artwork.

@@ -181,11 +181,11 @@ static lv_obj_t *cal_dot,*cal_label,*alarm_toggle,*alarm_toggle_label,*back_butt
 static int pending_action;
 static int64_t last_request_us[5];
 static esp_openclaw_node_handle_t display_node;
-static char agenda_text[1025] = "Family calendar not connected yet.";
+static char agenda_text[1025] = "Calendar not connected yet.";
 static char weather_text[513] = "Tap Weather to request a forecast.";
 static char action_status[96] = "";
 static lv_obj_t *clock_label, *day_label, *action_tiles[4], *action_labels[4];
-static const char *action_names[] = {"Ping Dad", "Ping Mom", "Weather", "Alarm"};
+static const char *action_names[] = {BUOY_PING_ONE_LABEL, BUOY_PING_TWO_LABEL, "Weather", "Alarm"};
 
 static void save_calibration(void)
 {
@@ -243,7 +243,7 @@ static void request_action(int action)
     if (!params || !payload) { cJSON_Delete(params); cJSON_Delete(payload); return; }
     cJSON_AddStringToObject(params, "event", "agent.request");
     cJSON_AddStringToObject(payload, "message", messages[action]);
-    cJSON_AddStringToObject(payload, "sessionKey", "agent:main:node:office-buoy-actions");
+    cJSON_AddStringToObject(payload, "sessionKey", BUOY_ACTION_SESSION_KEY);
     const char *target=action==1?BUOY_PING_ONE_TARGET:BUOY_PING_TWO_TARGET;
     bool deliver=action<=2 && target[0]!='\0';
     cJSON_AddBoolToObject(payload, "deliver", deliver);
@@ -678,7 +678,7 @@ static esp_err_t state_command(esp_openclaw_node_handle_t node,void *ctx,const c
     (void)node;(void)ctx;(void)json;(void)len;(void)error;
     cJSON *p=cJSON_CreateObject();if(!p)return ESP_ERR_NO_MEM;
     xSemaphoreTake(lock,portMAX_DELAY);
-    cJSON_AddStringToObject(p,"firmwareRelease","family-ui-v8-ux-polish");
+    cJSON_AddStringToObject(p,"firmwareRelease","claw-buoy-v8-portable");
     cJSON_AddStringToObject(p,"uiTheme","warm-terminal");
     cJSON_AddStringToObject(p,"touchFeedback","contact-halo-and-control-tint");
     cJSON_AddNumberToObject(p,"backlightGpio",CLAW_BACKLIGHT_GPIO);
@@ -800,7 +800,7 @@ esp_err_t claw_box_display_start(esp_openclaw_node_handle_t node)
     lv_obj_set_style_text_color(screen, lv_color_hex(BUOY_INK), 0);
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "OFFICE BUOY");
+    lv_label_set_text(title, "CLAW BUOY");
     lv_obj_set_pos(title, 12, 3);
     lv_obj_set_style_text_color(title, lv_color_hex(BUOY_ACCENT), 0);
     content_label=lv_label_create(screen);
@@ -924,7 +924,7 @@ esp_err_t claw_box_display_start(esp_openclaw_node_handle_t node)
         nvs_close(h);
     }
     if(calibration_stage){ping_test_mode=true;wake_requested=true;}
-    setenv("TZ","AST4ADT,M3.2.0,M11.1.0",1);tzset();
+    setenv("TZ",BUOY_TIMEZONE,1);tzset();
     if(esp_sntp_enabled()) { esp_sntp_stop(); }
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);esp_sntp_setservername(0,"pool.ntp.org");esp_sntp_init();
     touch_queue=xQueueCreate(8,sizeof(buoy_touch_stroke_t));

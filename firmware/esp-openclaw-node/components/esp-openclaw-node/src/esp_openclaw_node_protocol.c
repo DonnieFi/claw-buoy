@@ -1,3 +1,7 @@
+/* Modified by Donnie Fiander for Claw Buoy, 2026-10-15.
+ * Local application integration and/or memory-conscious handshake diagnostics;
+ * see docs/openclaw-integration.md at the repository root for scope.
+ */
 #include "esp_openclaw_node_hello_compact.h"
 /*
  * SPDX-FileCopyrightText: 2026 Espressif Systems (Shanghai) CO LTD

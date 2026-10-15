@@ -1,10 +1,12 @@
 menu "OpenClaw Example"
 
 config CLAW_BOX_DISPLAY
-    bool "Claw in a Box ILI9341 display (fixed Freenove WROOM pins)"
+    bool "Claw Buoy ILI9341 display (fixed Freenove WROOM pins)"
     depends on IDF_TARGET_ESP32
     default n
     help
-        Enable only after wiring per CLAW_IN_A_BOX.md. XPT2046 is deselected.
+        Enable only after checking the GPIO table in the repository root README.
+        XPT2046 touch is enabled on a separate SPI bus; the return line is shared.
+        Backlight control is GPIO17, not the board-reserved GPIO16.
 
 endmenu

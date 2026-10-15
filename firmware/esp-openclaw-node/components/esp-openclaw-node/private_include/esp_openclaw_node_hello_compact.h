@@ -1,3 +1,7 @@
+/* Copyright (c) 2026 Donnie Fiander
+ * SPDX-License-Identifier: MIT
+ * Added for Claw Buoy handshake memory handling.
+ */
 /* Project hello-ok onto the fields this node consumes before cJSON allocation.
  * jsmn (MIT), pinned at 25647e692c7906b96ffd2b05ca54c097948e879c.
  * No credentials or frame content are logged. Other messages stay unchanged.

@@ -11,6 +11,6 @@ This is a firmware-focused snapshot copied from the local OpenClaw ESP Node chec
 
 The example CMake layout is preserved so its relative component paths continue to resolve inside this folder. Use the project build guide for the ESP-IDF environment and build command.
 
-2026-10-12: example `main/` display sources, `sdkconfig.claw-box.defaults` and `esp_openclaw_node_protocol.c` updated to the "Office Buoy designer UI" build deployed 2026-10-07.
+2026-10-12: example `main/` display sources, `sdkconfig.claw-box.defaults` and `esp_openclaw_node_protocol.c` updated to the "Claw Buoy designer UI" build deployed 2026-10-07.
 
 2026-10-15: V8 adds warm-dark UI tokens, contact feedback, compact activity visuals, a native 96×70 mascot, full weekday and weather faces. Public distribution uses a fresh source allowlist: historical local build/evidence links above describe the private development archive and are not included. Site-specific prompts and delivery targets are excluded; see the root README for local overrides.

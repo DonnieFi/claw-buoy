@@ -6,9 +6,9 @@ The Buoy is an ESP32 **OpenClaw node**, not an OpenClaw Gateway fork. It keeps t
 
 Site-specific calendar/location/delivery rules are intentionally excluded and supplied through local private overrides and Gateway setup. This repo does not ship a configured personal Gateway or modify/install Gateway code.
 
-## Exact comparison baseline
+## Initial V8 snapshot comparison baseline
 
-Compared included C/H files byte-for-byte against upstream `openclaw/esp-openclaw-node` commit **9d905d30e5499e7d0d42a566b0f6bbf5c08c42f6**, using the local upstream Git object. This is the captured baseline, **not a claim of parity with current upstream**. This is a focused source snapshot, not a complete upstream checkout. Counts below are line-diff counts; generated logo arrays make raw line counts misleading.
+Compared included C/H files byte-for-byte against upstream `openclaw/esp-openclaw-node` commit **9d905d30e5499e7d0d42a566b0f6bbf5c08c42f6**, using the local upstream Git object. This is the captured baseline, **not a claim of parity with current upstream**. This is a focused source snapshot, not a complete upstream checkout. Counts below describe the initial V8 publication, before the portability and modification-notice cleanup. Current source also has configurable time/dark hours, labels and action routing; no additional node protocol behavior was changed. Counts below are line-diff counts; generated logo arrays make raw line counts misleading.
 
 ## Node library boundary
 

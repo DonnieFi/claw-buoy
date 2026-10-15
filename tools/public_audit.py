@@ -19,7 +19,6 @@ RULES = {
     'local-host': re.compile(rb'(?i)(?:https?://[^\s/\"\'<>]+\.(?:lan|local)\b|/home/(?!USER\b|user\b|example\b)[A-Za-z0-9_-]+/)'),
     'hardware-identity': re.compile(rb'(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b'),
     'personal-email': re.compile(rb'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'),
-    'family-content': re.compile(rb'(?i)\b(?:school\x20pickup|family\x20schedule|bedtime|child(?:ren)?\x27?s|soccer practice|dentist appointment)\b'),
 }
 IP = re.compile(rb'(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])')
 
@@ -32,8 +31,6 @@ def scan(data):
     found = []
     for number, line in enumerate(data.splitlines(), 1):
         for name, pattern in RULES.items():
-            if name == 'family-content' and b"'family-content': re.compile" in line:
-                continue
             if pattern.search(line):
                 found.append((number, name))
         for match in IP.finditer(line):
