@@ -32,12 +32,13 @@ V8 is built, USB-flashed, and live-regression checked: touch-feedback rendering 
 
 ## Hardware and wiring
 
-> **Affiliate disclosure:** As an Amazon Associate I earn from qualifying purchases. Part links below are amazon.ca search links with an affiliate tag; they do not pin an exact SKU, so check each listing against the specs.
+> **Affiliate disclosure:** As an Amazon Associate I earn from qualifying purchases. Part links below go to amazon.ca and amazon.com search pages and carry an affiliate tag for each store; they do not pin an exact SKU, so check each listing against the specs.
 
-- [Freenove classic ESP32-WROOM board](https://www.amazon.ca/s?k=Freenove+ESP32+WROOM+board&tag=threelayerbra-20), no PSRAM, 4 MB flash. Confirm your exact board variant; **GPIO16 is reserved for this board's onboard RGB LED**.
-- [2.8-inch ILI9341 SPI TFT](https://www.amazon.ca/s?k=2.8+inch+ILI9341+SPI+TFT+touch+display+XPT2046&tag=threelayerbra-20) (320 × 240 landscape) with XPT2046 resistive touch and onboard backlight-switch circuitry.
-- [AHT20 temperature/humidity breakout](https://www.amazon.ca/s?k=AHT20+temperature+humidity+sensor+breakout+I2C&tag=threelayerbra-20), I²C address `0x38`.
-- USB power ([cable](https://www.amazon.ca/s?k=USB+data+cable&tag=threelayerbra-20), [supply](https://www.amazon.ca/s?k=5V+USB+power+adapter&tag=threelayerbra-20)), [jumper wires](https://www.amazon.ca/s?k=dupont+jumper+wires+female+to+female&tag=threelayerbra-20), and a common ground.
+- Freenove classic ESP32-WROOM board ([Amazon.ca](https://www.amazon.ca/s?k=Freenove+ESP32+WROOM+board&tag=threelayerbra-20) / [Amazon.com](https://www.amazon.com/s?k=Freenove+ESP32+WROOM+board&tag=threelayerb0f-20)), no PSRAM, 4 MB flash. Confirm your exact board variant; **GPIO16 is reserved for this board's onboard RGB LED**.
+- 2.8-inch ILI9341 SPI TFT ([Amazon.ca](https://www.amazon.ca/s?k=2.8+inch+ILI9341+SPI+TFT+touch+display+XPT2046&tag=threelayerbra-20) / [Amazon.com](https://www.amazon.com/s?k=2.8+inch+ILI9341+SPI+TFT+touch+display+XPT2046&tag=threelayerb0f-20)) (320 × 240 landscape) with XPT2046 resistive touch and onboard backlight-switch circuitry.
+- AHT20 temperature/humidity breakout ([Amazon.ca](https://www.amazon.ca/s?k=AHT20+temperature+humidity+sensor+breakout+I2C&tag=threelayerbra-20) / [Amazon.com](https://www.amazon.com/s?k=AHT20+temperature+humidity+sensor+breakout+I2C&tag=threelayerb0f-20)), I²C address `0x38`.
+- USB power: cable ([Amazon.ca](https://www.amazon.ca/s?k=USB+data+cable&tag=threelayerbra-20) / [Amazon.com](https://www.amazon.com/s?k=USB+data+cable&tag=threelayerb0f-20)), supply ([Amazon.ca](https://www.amazon.ca/s?k=5V+USB+power+adapter&tag=threelayerbra-20) / [Amazon.com](https://www.amazon.com/s?k=5V+USB+power+adapter&tag=threelayerb0f-20)).
+- Jumper wires ([Amazon.ca](https://www.amazon.ca/s?k=dupont+jumper+wires+female+to+female&tag=threelayerbra-20) / [Amazon.com](https://www.amazon.com/s?k=dupont+jumper+wires+female+to+female&tag=threelayerb0f-20)) and a common ground.
 
 These are **GPIO numbers**, not physical header positions. The authoritative definitions are in [`claw_box_display.h`](firmware/esp-openclaw-node/examples/esp32-node/main/claw_box_display.h).
 
@@ -125,4 +126,4 @@ Project-owned materials use [MIT](LICENSE). The ESP OpenClaw Node snapshot retai
 
 ---
 
-*As an Amazon Associate I earn from qualifying purchases. Hardware links in this repository are affiliate links; they cost you nothing extra.*
+*As an Amazon Associate I earn from qualifying purchases. Hardware links in this repository go to amazon.ca and amazon.com and are affiliate links; they cost you nothing extra.*
