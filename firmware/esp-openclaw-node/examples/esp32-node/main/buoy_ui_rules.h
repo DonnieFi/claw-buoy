@@ -133,3 +133,12 @@ static inline int buoy_weather_parse(const char *name)
     for(int i=0;i<=BUOY_WEATHER_MIXED;++i)if(!strcmp(name,buoy_weather_name(i)))return i;
     return -1;
 }
+
+/* Test-mode button caption derived from a configured ping label:
+   "Ping Dad" -> "Test Dad"; labels without a "Ping " prefix get "Test " prepended. */
+static inline void buoy_test_label(char *out, size_t size, const char *label)
+{
+    if(!out||!size)return;
+    const char *rest=strncmp(label,"Ping ",5)==0?label+5:label;
+    snprintf(out,size,"Test %s",rest);
+}

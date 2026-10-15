@@ -1,0 +1,7 @@
+# Dependencies for build.py (STL generation) and render.py (preview image).
+# networkx is used by trimesh to split meshes into connected components.
+numpy
+manifold3d
+trimesh
+networkx
+matplotlib

@@ -1,11 +1,10 @@
-/* Modified by Donnie Fiander for Claw Buoy, 2026-10-15.
- * Local application integration and/or memory-conscious handshake diagnostics;
- * see docs/openclaw-integration.md at the repository root for scope.
- */
 /*
  * SPDX-FileCopyrightText: 2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
+ */
+/* Modified by Donnie Fiander for Claw Buoy, 2026-10-15.
+ * Rejects ADC commands on GPIOs reserved by the Claw Buoy display wiring.
  */
 
 #include "esp_openclaw_node_example_adc_node_cmd.h"

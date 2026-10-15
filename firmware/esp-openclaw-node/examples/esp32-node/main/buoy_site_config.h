@@ -1,5 +1,5 @@
 #pragma once
-/* Optional private deployment overrides live outside the public source allowlist. */
+/* Optional local overrides: create private_buoy_config.h (git-ignored) beside the example CMakeLists.txt. */
 #if __has_include("../private_buoy_config.h")
 #include "../private_buoy_config.h"
 #endif

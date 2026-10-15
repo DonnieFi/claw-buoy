@@ -2,7 +2,7 @@
 // Back plate 116.6 x 66.6 x 2.4, with 0.3mm clearance per side.
 // Sloped seat ledge starts z30.4; top z34; plate assembles z34..36.4, exterior flush.
 // Assembly: translate([0,70,36.4]) rotate([180,0,0]) back();
-// Screen screw spacing approximately 77 x 44, user measurement. 2mm pilot bores.
+// Screen screw spacing approximately 77 x 44, owner-measured. 2mm pilot bores.
 // Screen support height 5mm, also provisional. Main bay x2.4..100.
 // ESP32 rails on back: 4mm high, board 65x28, USB facing left wall.
 // AHT20 10x15 on back: 5mm high bars with retaining tie passages.

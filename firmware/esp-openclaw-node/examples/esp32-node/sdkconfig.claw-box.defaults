@@ -13,6 +13,6 @@ CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
 
 CONFIG_LV_FONT_MONTSERRAT_24=y
 
-# Report rendering/allocation faults while diagnosing blank pages.
+# Log LVGL warnings and errors (for example failed rendering or allocation).
 CONFIG_LV_USE_LOG=y
 CONFIG_LV_LOG_LEVEL_WARN=y

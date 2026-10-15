@@ -232,7 +232,7 @@ static void request_action(int action)
         xSemaphoreGive(lock);return;
     }
     if(action<=2 && ping_test_mode){
-        snprintf(action_status,sizeof(action_status),"TEST: Ping %s - no message sent",action==1?"Dad":"Mom");dirty=true;
+        snprintf(action_status,sizeof(action_status),"TEST: %s - no message sent",action_names[action-1]);dirty=true;
         xSemaphoreGive(lock);return;
     }
     last_request_us[action] = now;
@@ -545,7 +545,9 @@ static void ui_task(void *arg)
                     lv_obj_set_size(action_tiles[i],110,buoy_tile_height(overlay==2)-14);
                     lv_obj_remove_flag(action_tiles[i],LV_OBJ_FLAG_HIDDEN);
                     lv_obj_center(action_labels[i]);
-                    lv_label_set_text(action_labels[i],overlay==2?(const char*[]){"Hour -","Hour +","5 min -","5 min +"}[i]:(ping_test_mode&&i<2?(i==0?"Test Dad":"Test Mom"):action_names[i]));
+                    char test_text[48];
+                    buoy_test_label(test_text,sizeof(test_text),action_names[i]);
+                    lv_label_set_text(action_labels[i],overlay==2?(const char*[]){"Hour -","Hour +","5 min -","5 min +"}[i]:(ping_test_mode&&i<2?test_text:action_names[i]));
                 }
                 lv_obj_remove_flag(status_label,LV_OBJ_FLAG_HIDDEN);
                 lv_label_set_text_fmt(status_label,"Alarm %02d:%02d  %s%s%s",alarm_minute/60,alarm_minute%60,alarm_enabled?"ON":"OFF",action_status[0]?"\n":"",action_status);

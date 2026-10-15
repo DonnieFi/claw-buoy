@@ -8,13 +8,13 @@ jobs:
   host-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Compile and run hardware-independent UI and touch tests
         run: python3 tools/public_checks.py
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     container: espressif/idf:v5.4.2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Build the no-PSRAM ESP32 board configuration
         shell: bash
         working-directory: firmware/esp-openclaw-node/examples/esp32-node

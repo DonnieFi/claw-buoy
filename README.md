@@ -12,10 +12,20 @@ A small ESP32 desk companion with a 2.8-inch touchscreen, a claw mascot, room te
 
 *Generated concept storyboard with demo content, not screenshots of V8. See [artwork notes](assets/README.md).*
 
+## Quick start
+
+1. **Get the parts:** see the [parts list](hardware/PARTS.md) (classic Freenove ESP32-WROOM board, 2.8-inch ILI9341/XPT2046 touch display, AHT20 sensor, USB cable and supply, jumper wires).
+2. **Wire it** using the [GPIO table](#hardware-and-wiring). Power off first, and note that display LED control is GPIO17, not GPIO16.
+3. **Build** with ESP-IDF 5.4.2 for target `esp32`; the commands are in [Build from source](#build-from-source).
+4. **Flash** over USB with the same `idf.py` command, after checking wiring and selecting the correct serial device.
+5. **Pair** with your OpenClaw gateway: provision Wi-Fi and pairing at runtime from the device REPL, following the upstream [example documentation](https://github.com/openclaw/esp-openclaw-node/tree/main/examples/esp32-node). No credentials go in source.
+
+Optional: print the [V5 enclosure](hardware/enclosure/v5/); read its audit first, since fit is unconfirmed.
+
 ## What is included
 
 - [Parts list / BOM](hardware/PARTS.md) and the GPIO wiring table below.
-- [V5 enclosure](hardware/enclosure/v5/): body/back STL files, parametric OpenSCAD/Python source, preview and geometry audit. **Dimensions and fit are unconfirmed: the printer is currently down.**
+- [V5 enclosure](hardware/enclosure/v5/): body/back STL files, parametric OpenSCAD/Python source, preview and geometry audit. **Dimensions and fit are unconfirmed: the enclosure has not been test-fit.**
 - V8 firmware source, mascot assets, portable build configuration, host tests and CI.
 - Hero, comic storyboard and selected concept renders; not measured hardware photographs.
 - [OpenClaw integration and upstream change inventory](docs/openclaw-integration.md).
@@ -26,9 +36,11 @@ Artwork provenance and redistribution scope are documented in [artwork notes](as
 
 ## Project status
 
-This is a working hardware prototype, not a finished appliance. V7 firmware was deployed: gateway reconnection, sensor reads, UI commands, and five-minute idle sleep were checked. The GPIO17 backlight wire was moved and **physical darkness was confirmed**. Touch wakes the device, but sensitivity/mapping need further tuning; wake sometimes took several taps.
+This is a working hardware prototype, not a finished appliance.
 
-V8 is built, USB-flashed, and live-regression checked: touch-feedback rendering path, smaller activity tiles, a larger mascot, full weekday/date, and friendlier weather icons in a warm-dark, Omarchy-inspired palette. Calibration, alarm settings and cached content were preserved. Host tests cover mapping, gestures, control boundaries and pagination; deployed checks cover sensors, UI state, offline/stale content and notifications. Actual LCD appearance and touch feel still require human verification. V8 has not had a new physical idle/wake check; V7 is the physically confirmed baseline. Hardware dimensions and print fit are still unconfirmed; the printer is currently down.
+- **V7 firmware** was deployed and checked on the author's unit: gateway reconnection, sensor reads, UI commands, five-minute idle sleep, and physically confirmed backlight-off. Touch wake works but needs tuning; it sometimes took several taps.
+- **V8 (this source)** is built, USB-flashed and regression-checked (host tests plus deployed checks of sensors, UI state, offline/stale content and notifications). Actual LCD appearance, touch feel and V8 idle/wake have not been physically verified.
+- **Enclosure** dimensions and print fit are unconfirmed; it has not been test-fit.
 
 ## Hardware and wiring
 
@@ -77,11 +89,11 @@ idf.py -B build-claw-box -D SDKCONFIG=sdkconfig.claw-box \
 idf.py -B build-claw-box -p /dev/ttyUSB0 flash monitor
 ```
 
-The public candidate includes `dependencies.lock`; it records the resolved component versions. Managed components are fetched from Espressif's registry, not committed. Build success is not physical verification. For provisioning and node protocol details, refer to the upstream [example documentation](https://github.com/openclaw/esp-openclaw-node/tree/main/examples/esp32-node); board-specific wiring above overrides generic examples.
+The repository includes `dependencies.lock`; it records the resolved component versions. Managed components are fetched from Espressif's registry, not committed. Build success is not physical verification. For provisioning and node protocol details, refer to the upstream [example documentation](https://github.com/openclaw/esp-openclaw-node/tree/main/examples/esp32-node); board-specific wiring above overrides generic examples.
 
 ### Site-specific actions
 
-The public defaults contain no personal delivery targets or calendar rules. Ping test mode is enabled by default; real delivery requires deliberate local setup. To customize, create an untracked `private_buoy_config.h` beside the example's `CMakeLists.txt`; override the `BUOY_*` strings documented in [`buoy_site_config.h`](firmware/esp-openclaw-node/examples/esp32-node/main/buoy_site_config.h). Keep that file private. Configure your weather location/timezone and authorized calendar in the gateway agent, and explicitly configure any delivery target before enabling real pings. Never publish your locally built image: those overrides become embedded in it.
+The checked-in defaults contain no personal delivery targets or calendar rules. Ping test mode is enabled by default; real delivery requires deliberate local setup. To customize, create an untracked `private_buoy_config.h` beside the example's `CMakeLists.txt`; override the `BUOY_*` strings documented in [`buoy_site_config.h`](firmware/esp-openclaw-node/examples/esp32-node/main/buoy_site_config.h). Keep that file private. Configure your weather location/timezone and authorized calendar in the gateway agent, and explicitly configure any delivery target before enabling real pings. Never publish your locally built image: those overrides become embedded in it.
 
 ### Local clock and controls
 
@@ -114,15 +126,15 @@ CI runs those checks, a redacted Gitleaks history scan, and a clean ESP-IDF buil
 
 The geometry was checked, but the enclosure has **not** been slice-verified or physically test-fit. Read the audit for board envelopes, screw limits, cable clearance, and print orientation. No G-code is supplied.
 
+To regenerate the STL files and preview from the Python source, see [Regenerating the STL files](hardware/enclosure/v5/AUDIT.md#regenerating-the-stl-files).
+
 ## Contributing and security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Keep live messages, calendars, credentials, device identities, logs, NVS dumps, and machine-specific configuration out of issues and pull requests.
 
-Source-only exports can be prepared with `tools/public_export.py`; local release archives and live-test evidence are not distributed.
-
 ## License and credits
 
-Project-owned materials use [MIT](LICENSE). The ESP OpenClaw Node snapshot retains its [Apache-2.0 license](firmware/esp-openclaw-node/LICENSE) and [upstream provenance](firmware/esp-openclaw-node/SNAPSHOT.md). The vendored jsmn parser retains its MIT notice. Registry dependencies retain their respective licenses; a source repository is not a license grant for upstream names, logos, or trademarks.
+Project-owned materials use [MIT](LICENSE). The firmware under `firmware/esp-openclaw-node/` is a snapshot of [openclaw/esp-openclaw-node](https://github.com/openclaw/esp-openclaw-node) (upstream commit `9d905d3`) with local modifications. It retains its [Apache-2.0 license](firmware/esp-openclaw-node/LICENSE); see its [SNAPSHOT.md](firmware/esp-openclaw-node/SNAPSHOT.md) and the [change inventory](docs/openclaw-integration.md). The vendored jsmn parser retains its MIT notice. Registry dependencies retain their respective licenses; a source repository is not a license grant for upstream names, logos, or trademarks.
 
 ---
 

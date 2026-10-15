@@ -15,4 +15,4 @@ Quantities are for one device. Exact supplier SKUs have not been recorded; check
 | 1 set | Printed enclosure | PLA filament: [Amazon.ca](https://www.amazon.ca/s?k=PLA+filament+1.75mm&tag=threelayerbra-20) / [Amazon.com](https://www.amazon.com/s?k=PLA+filament+1.75mm&tag=threelayerb0f-20) | V5 body.stl and back.stl; PLA suggested; print fit and dimensions unconfirmed |
 | As needed | Fasteners | — | Select only after checking the enclosure audit and actual board; lengths and fit are not validated |
 
-The printer is currently down. Nominal CAD dimensions are not measured/verified assembly dimensions. No successful physical fit or validated G-code is claimed. See [enclosure audit](enclosure/v5/AUDIT.md) for clearances and screw limits. Do not assume an arbitrary display module is electrically or mechanically compatible.
+The enclosure has not been test-fit. Nominal CAD dimensions are not measured/verified assembly dimensions. No successful physical fit or validated G-code is claimed. See [enclosure audit](enclosure/v5/AUDIT.md) for clearances and screw limits. Do not assume an arbitrary display module is electrically or mechanically compatible.

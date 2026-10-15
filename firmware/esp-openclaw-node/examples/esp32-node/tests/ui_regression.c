@@ -85,6 +85,12 @@ int main(void){
     assert(!buoy_touch_track(&tracker,false,0,0,0,120000,&stroke));
     assert(buoy_touch_track(&tracker,false,0,0,0,130000,&stroke));
     assert(stroke.started_us==70000&&stroke.peak_x==1001);
+    char label[16];
+    buoy_test_label(label,sizeof(label),"Ping Dad");assert(!strcmp(label,"Test Dad"));
+    buoy_test_label(label,sizeof(label),"Ping 1");assert(!strcmp(label,"Test 1"));
+    buoy_test_label(label,sizeof(label),"Nap");assert(!strcmp(label,"Test Nap"));
+    buoy_test_label(label,sizeof(label),"Ping Extremely Long Label");assert(strlen(label)==15);
+    buoy_test_label(label,sizeof(label),BUOY_PING_ONE_LABEL);assert(!strncmp(label,"Test ",5));
     for(int kind=0;kind<=BUOY_WEATHER_MIXED;++kind)assert(buoy_weather_parse(buoy_weather_name(kind))==kind);
     assert(buoy_weather_parse("invalid")==-1);
     puts("PASS: alarm Back/toggle/tile separation over all screen pixels; 10ms stroke tracker, peak-pressure coordinates and dropout debounce");

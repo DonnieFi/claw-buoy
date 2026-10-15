@@ -1,11 +1,10 @@
-/* Modified by Donnie Fiander for Claw Buoy, 2026-10-15.
- * Local application integration and/or memory-conscious handshake diagnostics;
- * see docs/openclaw-integration.md at the repository root for scope.
- */
 /*
  * SPDX-FileCopyrightText: 2026 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
+ */
+/* Modified by Donnie Fiander for Claw Buoy, 2026-10-15.
+ * Starts the Claw Buoy display and shows connection status on it, starts the REPL and display before saved-session reconnect, and registers a failed-allocation log callback.
  */
 
 #include "esp_openclaw_node_example_cmd.h"
@@ -69,7 +68,7 @@ static void handle_node_event(
 
 static void failed_alloc(size_t size, uint32_t caps, const char *function)
 {
-    ESP_EARLY_LOGW(TAG, "[DEBUG-buoy] alloc_failed size=%u caps=%u function=%s", (unsigned)size, (unsigned)caps, function);
+    ESP_EARLY_LOGW(TAG, "heap allocation failed: size=%u caps=%u function=%s", (unsigned)size, (unsigned)caps, function);
 }
 
 void app_main(void)

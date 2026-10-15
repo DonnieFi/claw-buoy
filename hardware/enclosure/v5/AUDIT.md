@@ -1,8 +1,8 @@
-# Enclosure v4 audit and v5 changes
+# Enclosure v5 audit
 
-V4 was a fit draft, not a confirmed print-ready hardware assembly. The earlier body/back collision check covered only plastics, not boards or connectors.
+This is the audit for the v5 enclosure in this directory. It is a fit draft, not a confirmed print-ready hardware assembly. It also lists what changed from the earlier v4 draft (v4 files are not included in this repository). The v4 body/back collision check covered only plastics, not boards or connectors.
 
-## Findings corrected in v5
+## Findings corrected from v4 in v5
 
 - ESP32 tie tunnel roof spanned 26 mm; it now spans 2.8 mm across each 6 mm-wide support. Feed ties along the case height through each rail, around the PCB width.
 - AHT20 tie tunnel roof spanned 8 mm; it now spans 2.8 mm. Feed one tie through both bars around the PCB length, keeping the sensing element uncovered.
@@ -23,13 +23,13 @@ Two printed parts: body and back. No carrier, tray, or printed clips.
 
 ## Hardware envelope checks
 
-Screen PCB: estimated 93 x 55 x 1.6 mm at x4..97, y7.5..62.5, z8..9.6. User screw spacing approximately 77 x44 mm, centered at x50.5 y35; actual PCB-to-hole and active-area offset remain unmeasured.
+Screen PCB: estimated 93 x 55 x 1.6 mm at x4..97, y7.5..62.5, z8..9.6. Owner-measured screw spacing is approximately 77 x 44 mm, centered at x50.5 y35; actual PCB-to-hole and active-area offset remain unmeasured.
 
-User screen depth estimate: front glass to board approximately 4 mm, to pin ends approximately 14 mm. With the PCB support face at z8, glass nominally reaches z4, pin ends z18. ESP32 PCB nominal front-facing surface reaches z28.4, giving approximately 10.4 mm to bare screen pin ends before any ESP32 component or connector intrusion. This does not establish clearance to boxed jumper housings or bent wires.
+Owner-measured screen depth estimate: front glass to board approximately 4 mm, to pin ends approximately 14 mm. With the PCB support face at z8, glass nominally reaches z4, pin ends z18. ESP32 PCB nominal front-facing surface reaches z28.4, giving approximately 10.4 mm to bare screen pin ends before any ESP32 component or connector intrusion. This does not establish clearance to boxed jumper housings or bent wires.
 
 ESP32 PCB: estimate 65 x28 x1.6 mm; nominally supported 4 mm above inside back. If jumper sockets face the back, 4 mm may be insufficient; if they face the screen, their reach must fit the above gap. Exact component contact and wire routing remain unverified.
 
-AHT20 PCB: user 10 x15 mm; sensor bay approximately 15.6 mm wide. Stops and bars fit the nominal PCB; right-angle jumper housing envelope remains unmeasured.
+AHT20 PCB: owner-measured 10 x 15 mm; sensor bay approximately 15.6 mm wide. Stops and bars fit the nominal PCB; right-angle jumper housing envelope remains unmeasured.
 
 ## Verification
 
@@ -43,4 +43,18 @@ AHT20 PCB: user 10 x15 mm; sensor bay approximately 15.6 mm wide. Stops and bars
 
 Body front face down; back exterior face down, rails facing up. Start with 0.2 mm layers, 0.4 mm nozzle, at least three walls and 4–5 solid top/bottom layers in your known PLA profile. These are starting settings, not a validated job. Inspect slicer layer preview at tie roofs, ledge and divider roof; actual bridging capability varies. Clear tie passages after printing and test back clearance before loading boards.
 
-Dry-fit screen and cable plugs, fasten screen, tie ESP32 and AHT20 to back, check side USB reach and internal wires, then fasten back. Do not tighten PCB screws hard enough to bow the board. Preserve v4 files as the prior revision; use v5 body and back together.
+Dry-fit screen and cable plugs, fasten screen, tie ESP32 and AHT20 to back, check side USB reach and internal wires, then fasten back. Do not tighten PCB screws hard enough to bow the board. Use the v5 body and back together.
+
+## Regenerating the STL files
+
+`build.py` rebuilds `body.stl` and `back.stl` from the parametric geometry and re-runs the clearance and watertightness assertions; `render.py` redraws `preview.png` from the STL files. With Python 3.10 or newer:
+
+```bash
+cd hardware/enclosure/v5
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+python3 build.py    # rewrites body.stl and back.stl
+python3 render.py   # optional: rewrites preview.png
+```
+
+`enclosure.scad` is the OpenSCAD form of the same geometry. The checked-in STL files were regenerated with this recipe (numpy 2.5.4, manifold3d 3.5.4, trimesh 5.1.1, networkx 3.7) and came out byte-identical.

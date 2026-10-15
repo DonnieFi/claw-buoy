@@ -2,7 +2,7 @@
 
 ## Architecture
 
-The Buoy is an ESP32 **OpenClaw node**, not an OpenClaw Gateway fork. It keeps the upstream node connection, provisioning and command mechanism. Local firmware owns LCD/touch rendering, calibrated navigation, clock, alarm, idle/overnight backlight control and cached content. Buttons submit `agent.request` through the existing `node.event` Gateway request path; the Gateway agent performs configured weather/calendar/delivery work. A request being accepted is not confirmation of message delivery. Display commands (`display.text`, `display.update`, `display.state`) provide the return/control path. AHT20 commands provide room sensor readings. BLE/Classic discovery source is included; it is not proof of presence detection.
+Claw Buoy is an ESP32 **OpenClaw node**, not an OpenClaw Gateway fork. It keeps the upstream node connection, provisioning and command mechanism. Local firmware owns LCD/touch rendering, calibrated navigation, clock, alarm, idle/overnight backlight control and cached content. Buttons submit `agent.request` through the existing `node.event` Gateway request path; the Gateway agent performs configured weather/calendar/delivery work. A request being accepted is not confirmation of message delivery. Display commands (`display.text`, `display.update`, `display.state`) provide the return/control path. AHT20 commands provide room sensor readings. BLE/Classic discovery source is included; it is not proof of presence detection.
 
 Site-specific calendar/location/delivery rules are intentionally excluded and supplied through local private overrides and Gateway setup. This repo does not ship a configured personal Gateway or modify/install Gateway code.
 

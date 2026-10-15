@@ -1,5 +1,3 @@
-import sys
-sys.path.insert(0,'/tmp/enclosure-render-deps')
 from pathlib import Path
 import numpy as np
 import manifold3d as m
@@ -8,7 +6,7 @@ OUT=Path(__file__).parent
 W,H,D=120,70,36.4
 # Flush inset plate: 0.3mm clearance per side; plate underside seats at z34.
 BACK_INSET=1.7; BACK_THICKNESS=2.4
-# Screen outline 93x55; user approximate screw spacing 77x44.
+# Screen outline 93x55; owner-measured approximate screw spacing 77x44.
 SCREEN_HOLES=[(12,13),(89,13),(12,57),(89,57)]
 class Solid:
  def __init__(self,mesh,code):self.mesh,self.code=mesh,code
@@ -83,7 +81,7 @@ header='''// Compact v5, mm. 120 x 70 x 36.4 assembled; flush inset back.
 // Back plate 116.6 x 66.6 x 2.4, with 0.3mm clearance per side.
 // Sloped seat ledge starts z30.4; top z34; plate assembles z34..36.4, exterior flush.
 // Assembly: translate([0,70,36.4]) rotate([180,0,0]) back();
-// Screen screw spacing approximately 77 x 44, user measurement. 2mm pilot bores.
+// Screen screw spacing approximately 77 x 44, owner-measured. 2mm pilot bores.
 // Screen support height 5mm, also provisional. Main bay x2.4..100.
 // ESP32 rails on back: 4mm high, board 65x28, USB facing left wall.
 // AHT20 10x15 on back: 5mm high bars with retaining tie passages.
