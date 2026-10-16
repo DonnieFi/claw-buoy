@@ -86,6 +86,7 @@ static inline bool buoy_valid_date(const char *date)
 
 /* Sampling owns this tracker; rendering consumes completed strokes only. */
 typedef struct {
+    bool press; /* True only for the initial contact event; release follows separately. */
     uint16_t first_x,first_y,last_x,last_y,min_x,min_y,max_x,max_y,peak_x,peak_y,pressure;
     int64_t started_us,ended_us;
 } buoy_touch_stroke_t;
@@ -108,11 +109,20 @@ static inline bool buoy_touch_track(buoy_touch_tracker_t *t,bool valid,uint16_t 
     }
     return false;
 }
+/* Exactly one initial press and one debounced release per stroke. */
+static inline bool buoy_touch_event(buoy_touch_tracker_t *t,bool valid,uint16_t x,uint16_t y,uint16_t pressure,int64_t now,buoy_touch_stroke_t *out)
+{
+    bool was_down=t->down;
+    bool completed=buoy_touch_track(t,valid,x,y,pressure,now,out);
+    if(completed){out->press=false;return true;}
+    if(!was_down&&t->down){*out=t->stroke;out->press=true;return true;}
+    return false;
+}
 /* One geometry source for drawing, tap dispatch and host boundary tests. */
 static inline int buoy_tile_top(bool alarm,int tile) { return (alarm?30:36)+(tile/2)*(alarm?54:64); }
 static inline int buoy_tile_height(bool alarm) { return alarm?48:58; }
 static inline int buoy_alarm_back(int x,int y) { return buoy_in_rect(x,y,24,188,295,235); }
-static inline int buoy_alarm_toggle(int x,int y) { return buoy_in_rect(x,y,30,142,289,181); }
+static inline int buoy_alarm_toggle(int x,int y) { return buoy_in_rect(x,y,30,140,289,183); }
 
 static inline int buoy_action_target(bool alarm,int x,int y)
 {
@@ -141,4 +151,27 @@ static inline void buoy_test_label(char *out, size_t size, const char *label)
     if(!out||!size)return;
     const char *rest=strncmp(label,"Ping ",5)==0?label+5:label;
     snprintf(out,size,"Test %s",rest);
+}
+
+/* Three raw contacts -> landscape targets (40,40), (280,190), (280,40).
+ * Legacy corner payloads continue using the original two-axis transform. */
+typedef struct { double x[3], y[3]; } buoy_affine_t;
+static inline bool buoy_affine_fit(buoy_affine_t *a, int x0,int y0,int x1,int y1,int x2,int y2)
+{
+    double dx1=x1-x0,dy1=y1-y0,dx2=x2-x0,dy2=y2-y0;
+    double det=dx1*dy2-dx2*dy1;
+    if (det>-250000 && det<250000) return false;
+    a->x[0]=(240*dy2-240*dy1)/det; a->x[1]=(240*dx1-240*dx2)/det;
+    a->y[0]=150*dy2/det; a->y[1]=-150*dx2/det;
+    a->x[2]=40-a->x[0]*x0-a->x[1]*y0;
+    a->y[2]=40-a->y[0]*x0-a->y[1]*y0;
+    return true;
+}
+static inline int buoy_affine_axis(const double a[3], int x,int y) { return (int)(a[0]*x+a[1]*y+a[2]+0.5); }
+/* Only main controls activate on initial contact. Navigation/calibration remain
+ * release-classified. One contact can activate at most one control. */
+static inline bool buoy_press_target(int page,int overlay,int x,int y)
+{
+    return page==2 && overlay!=1 && (buoy_action_target(overlay==2,x,y)>=0 ||
+        (overlay==2 && (buoy_alarm_back(x,y)||buoy_alarm_toggle(x,y))));
 }

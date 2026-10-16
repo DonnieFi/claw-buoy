@@ -4,6 +4,8 @@
 #include "esp_err.h"
 
 esp_err_t claw_box_touch_start(void);
+#define CLAW_TOUCH_PRESSURE_THRESHOLD 50
+#define CLAW_TOUCH_SPI_HZ 1000000
 /* Uncalibrated 12-bit coordinates; a false result means no valid contact. */
 bool claw_box_touch_read(uint16_t *x, uint16_t *y);
 

@@ -1,8 +1,17 @@
 # OpenClaw ESP Node source snapshot
 
-Firmware-focused snapshot of [openclaw/esp-openclaw-node](https://github.com/openclaw/esp-openclaw-node) at upstream commit `9d905d3` (Apache-2.0; see `LICENSE`). It is not a complete upstream checkout and makes no claim of parity with current upstream.
+Firmware-focused snapshot of [openclaw/esp-openclaw-node](https://github.com/openclaw/esp-openclaw-node) updated through upstream commit `fb7bbc3ad626018d68d6b7585744d7f574b888c0` (v1.2.0 plus subsequent fixes) (Apache-2.0; see `LICENSE`). It is not a complete upstream checkout and makes no claim of parity with current upstream.
 
 Included directories: `components/esp-openclaw-node`, `components/esp-openclaw-node-provisioning` and `examples/esp32-node`. Build caches, managed components and generated `sdkconfig` files are not included; `dependencies.lock` records the resolved component versions.
+
+## Upstream refresh (2026-10-16)
+
+Imported all changes affecting the included node/provisioning/example sources since
+`9d905d3`: guarded teardown, bounded handshake recovery, WebSocket client 1.8.0,
+saved-session reconnect behavior, and USB console nearby Wi-Fi discovery. Upstream
+Talk/audio, M5Dial and watch examples are outside this firmware snapshot and are
+not enabled on the no-PSRAM Buoy. The local hello-compaction patch is retained.
+Upstream Unity tests are included, but have not been run on a Unity test target.
 
 ## Changes from upstream
 

@@ -34,7 +34,7 @@ dependencies:
       type: service
     version: 1.2.0
   espressif/esp_websocket_client:
-    component_hash: c5a067a9fddea370c478017e66fac302f4b79c3d4027e9bdd42a019786cceb92
+    component_hash: dc00233af846f3a744ada283a300e0d586040aadc3ee67361645ecdce4523672
     dependencies:
     - name: idf
       require: private
@@ -42,7 +42,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.6.1
+    version: 1.8.0
   espressif/libsodium:
     component_hash: d4066b373fc6d4c5196db42aeea7faef4ac7f3080af96c2b74e2476c08b78dc1
     dependencies:
@@ -71,6 +71,6 @@ direct_dependencies:
 - espressif/libsodium
 - idf
 - lvgl/lvgl
-manifest_hash: 34efe04666920738fd2361faf80c91ba1a4075c918d84bf62188040a351db153
+manifest_hash: 7a55d643bde9f605e54804652e9bd9bb794b513542a662afa216507ec5974385
 target: esp32
 version: 2.0.0

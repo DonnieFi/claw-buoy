@@ -39,8 +39,18 @@ Artwork provenance and redistribution scope are documented in [artwork notes](as
 This is a working hardware prototype, not a finished appliance.
 
 - **V7 firmware** was deployed and checked on the author's unit: gateway reconnection, sensor reads, UI commands, five-minute idle sleep, and physically confirmed backlight-off. Touch wake works but needs tuning; it sometimes took several taps.
-- **V8 (this source)** is built, USB-flashed and regression-checked (host tests plus deployed checks of sensors, UI state, offline/stale content and notifications). Actual LCD appearance, touch feel and V8 idle/wake have not been physically verified.
+- **V8 baseline** is built, USB-flashed and regression-checked (host tests plus deployed checks of sensors, UI state, offline/stale content and notifications). Actual LCD appearance, touch feel and V8 idle/wake have not been physically verified.
 - **Enclosure** dimensions and print fit are unconfirmed; it has not been test-fit.
+
+### V9 upstream and touch update
+
+- Node/provisioning sources refreshed through upstream `fb7bbc3`; retains the WROOM/no-PSRAM configuration and local handshake memory patch.
+- Custom XPT2046 acquisition retained: named pressure threshold **50**, median filtering, **10 ms** sampling and **1 MHz** SPI. A 2 MHz clock is not enabled without signal verification.
+- Main action/alarm buttons activate once on **press-down**. A drag starting on a button therefore activates that button; releasing or dragging afterward cannot undo an action. Page swipes, content navigation and calibration remain release-classified. Main targets are at least 44 px high.
+- Sleep wakes on initial contact with a visible halo/backlight receipt; its release does not send a ping or navigate. Tap again to choose a control.
+- New calibrations use **three-point affine** fitting, persisted to NVS. Existing two-point calibration remains valid. Legacy `calibrationCorners: [x0,y0,x1,y1]` updates deliberately select legacy mapping.
+- Touch self-test: `display.update {"touchTest":true}` shows raw X/Y, pressure, mapped position and a contact dot, with actions suppressed. Exit with `{"touchTest":false}`. Calibration starts with `{"calibrate":true}` and disables pings until restored deliberately.
+- Automated checks do not establish physical sensitivity, edge accuracy, LCD appearance or subjective responsiveness. See [touch evaluation](docs/touch-v9.md).
 
 ## Hardware and wiring
 

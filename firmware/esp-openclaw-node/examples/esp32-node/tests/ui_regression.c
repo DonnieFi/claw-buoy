@@ -18,7 +18,41 @@ static void check_text(const char *input) {
     for(const char *q=input;*q;++q)if(*q!='\n')expected[e++]=*q;
     expected[e]=0;assert(!strcmp(joined,expected));
 }
+static void affine_and_press_tests(void)
+{
+    buoy_touch_tracker_t t={0};buoy_touch_stroke_t e;
+    assert(buoy_touch_event(&t,true,2900,3600,50,0,&e)&&e.press);
+    assert(!buoy_touch_event(&t,true,2800,3500,60,10000,&e));
+    assert(!buoy_touch_event(&t,false,0,0,0,20000,&e));
+    assert(!buoy_touch_event(&t,true,2700,3400,60,30000,&e));
+    assert(!buoy_touch_event(&t,false,0,0,0,40000,&e));
+    assert(!buoy_touch_event(&t,false,0,0,0,50000,&e));
+    assert(buoy_touch_event(&t,false,0,0,0,60000,&e)&&!e.press);
+    assert(!buoy_touch_event(&t,false,0,0,0,70000,&e));
+    assert(buoy_touch_event(&t,true,2900,3600,50,80000,&e)&&e.press);
+    buoy_affine_t a;
+    assert(!buoy_affine_fit(&a,0,0,1000,1000,2000,2000));
+    /* Skewed panel, reversed axes, and an independent midpoint. */
+    assert(buoy_affine_fit(&a,2900,3600,800,800,3000,900));
+    assert(abs(buoy_affine_axis(a.x,2900,3600)-40)<=1);
+    assert(abs(buoy_affine_axis(a.y,2900,3600)-40)<=1);
+    assert(abs(buoy_affine_axis(a.x,800,800)-280)<=1);
+    assert(abs(buoy_affine_axis(a.y,800,800)-190)<=1);
+    assert(abs(buoy_affine_axis(a.x,3000,900)-280)<=1);
+    assert(abs(buoy_affine_axis(a.y,3000,900)-40)<=1);
+    assert(abs(buoy_affine_axis(a.x,1850,2200)-160)<=1);
+    assert(abs(buoy_affine_axis(a.y,1850,2200)-115)<=1);
+    assert(buoy_press_target(2,0,60,60));
+    assert(!buoy_press_target(0,0,60,60));
+    assert(!buoy_press_target(2,1,60,60));
+    assert(!buoy_press_target(2,0,10,60));
+    assert(buoy_press_target(2,2,60,141));
+    for(int x=0;x<320;++x)for(int y=0;y<240;++y)
+        if(buoy_alarm_toggle(x,y))assert(buoy_action_target(true,x,y)<0&&!buoy_alarm_back(x,y));
+    puts("PASS: affine skew/reversed axes/midpoint/degenerate fit; press-down target boundaries; 44px toggle");
+}
 int main(void){
+    affine_and_press_tests();
     char t[40],h[24];buoy_format_sensor(t,sizeof(t),h,sizeof(h),21.3,57.4,false);
     assert(!strcmp(t,"21.3 C")&&!strcmp(h,"57% RH"));
     buoy_format_sensor(t,sizeof(t),h,sizeof(h),-12.5,100,true);

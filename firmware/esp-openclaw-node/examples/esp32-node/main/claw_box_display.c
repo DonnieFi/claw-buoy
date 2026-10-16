@@ -175,8 +175,15 @@ static bool alarm_enabled;
 static uint16_t last_raw_x, last_raw_y;
 static int touch_x,touch_y;
 static bool touch_calibrated,wake_requested;
+static bool touch_test, press_consumed, affine_valid;
+static int32_t cal_x0,cal_y0,cal_x1,cal_y1,cal_x2,cal_y2;
+static buoy_affine_t affine;
+static lv_obj_t *test_panel,*test_label;
+static unsigned touch_presses;
+static int clamp_pixel(int value,int max);
+static int map_x(int x,int y) { return clamp_pixel(affine_valid?buoy_affine_axis(affine.x,x,y):buoy_axis(y,cal_y0,cal_y1,40,280),319); }
+static int map_y(int x,int y) { return clamp_pixel(affine_valid?buoy_affine_axis(affine.y,x,y):buoy_axis(x,cal_x0,cal_x1,40,190),239); }
 static int calibration_stage=1;
-static int32_t cal_x0,cal_y0,cal_x1,cal_y1;
 static lv_obj_t *cal_dot,*cal_label,*alarm_toggle,*alarm_toggle_label,*back_button,*back_label;
 static int pending_action;
 static int64_t last_request_us[5];
@@ -190,7 +197,7 @@ static const char *action_names[] = {BUOY_PING_ONE_LABEL, BUOY_PING_TWO_LABEL, "
 static void save_calibration(void)
 {
  nvs_handle_t h;
- if(nvs_open("buoy_ui",NVS_READWRITE,&h)==ESP_OK){nvs_set_i32(h,"cx0",cal_x0);nvs_set_i32(h,"cy0",cal_y0);nvs_set_i32(h,"cx1",cal_x1);nvs_set_i32(h,"cy1",cal_y1);nvs_commit(h);nvs_close(h);}
+ if(nvs_open("buoy_ui",NVS_READWRITE,&h)==ESP_OK){nvs_set_i32(h,"cx0",cal_x0);nvs_set_i32(h,"cy0",cal_y0);nvs_set_i32(h,"cx1",cal_x1);nvs_set_i32(h,"cy1",cal_y1);nvs_set_u8(h,"affine",affine_valid);nvs_set_i32(h,"cx2",cal_x2);nvs_set_i32(h,"cy2",cal_y2);nvs_commit(h);nvs_close(h);}
 }
 static void save_integration_state(void)
 {
@@ -228,7 +235,7 @@ static void request_action(int action)
 {
     int64_t now = esp_timer_get_time();
     xSemaphoreTake(lock,portMAX_DELAY);
-    if (!touch_calibrated || calibration_stage || action < 1 || action > 4 || (last_request_us[action] && now-last_request_us[action] < 15000000)) {
+    if (touch_test || !touch_calibrated || calibration_stage || action < 1 || action > 4 || (last_request_us[action] && now-last_request_us[action] < 15000000)) {
         xSemaphoreGive(lock);return;
     }
     if(action<=2 && ping_test_mode){
@@ -276,13 +283,13 @@ static void touch_task(void *arg)
     for(;;){
         uint16_t x=0,y=0;bool valid=claw_box_touch_read(&x,&y);
         claw_box_touch_diagnostics_t d;claw_box_touch_get_diagnostics(&d);
-        bool completed=buoy_touch_track(&tracker,valid,x,y,d.pressure,esp_timer_get_time(),&stroke);
+        bool event=buoy_touch_event(&tracker,valid,x,y,d.pressure,esp_timer_get_time(),&stroke);
         unsigned preview=tracker.down ? (1U<<24)|((unsigned)tracker.stroke.last_x<<12)|tracker.stroke.last_y : 0;
         /* Clear the preview before publishing a release: the UI must not tint
            a destination page with the old contact after navigation. */
         atomic_store(&contact_preview,preview);
-        if(completed){
-            /* Drop whole gestures on overflow: never invent a tap from fragments. */
+        if(event){
+            /* Whole events only; release never causes a second button action. */
             if(xQueueSend(touch_queue,&stroke,0)!=pdTRUE)atomic_fetch_add(&dropped_strokes,1);
         }
         vTaskDelayUntil(&last,pdMS_TO_TICKS(10));
@@ -300,16 +307,40 @@ static void poll_touch(void)
     for(unsigned processed=0;processed<8&&xQueueReceive(touch_queue,&stroke,0)==pdTRUE;++processed){
         int64_t now=esp_timer_get_time();
         xSemaphoreTake(lock,portMAX_DELAY);
-        int start_x=clamp_pixel(buoy_axis(stroke.first_y,cal_y0,cal_y1,40,280),319);
-        int start_y=clamp_pixel(buoy_axis(stroke.first_x,cal_x0,cal_x1,40,190),239);
-        int low_x=clamp_pixel(buoy_axis(stroke.min_y,cal_y0,cal_y1,40,280),319);
-        int high_x=clamp_pixel(buoy_axis(stroke.max_y,cal_y0,cal_y1,40,280),319);
-        int low_y=clamp_pixel(buoy_axis(stroke.min_x,cal_x0,cal_x1,40,190),239);
-        int high_y=clamp_pixel(buoy_axis(stroke.max_x,cal_x0,cal_x1,40,190),239);
-        int excursion=abs(low_x-start_x);
-        if(abs(high_x-start_x)>excursion)excursion=abs(high_x-start_x);
-        if(abs(low_y-start_y)>excursion)excursion=abs(low_y-start_y);
-        if(abs(high_y-start_y)>excursion)excursion=abs(high_y-start_y);
+        int start_x=map_x(stroke.first_x,stroke.first_y);
+        int start_y=map_y(stroke.first_x,stroke.first_y);
+        int excursion=0;
+        for(int i=0;i<4;++i){
+            int rx=(i&1)?stroke.max_x:stroke.min_x,ry=(i&2)?stroke.max_y:stroke.min_y;
+            int dx=abs(map_x(rx,ry)-start_x),dy=abs(map_y(rx,ry)-start_y);
+            if(dx>excursion)excursion=dx;
+            if(dy>excursion)excursion=dy;
+        }
+        if(stroke.press){
+            ++touch_presses;press_consumed=false;
+            touch_x=start_x;touch_y=start_y;last_raw_x=stroke.first_x;last_raw_y=stroke.first_y;
+            last_touch_us=now;manual_night_until_us=now+300000000;
+            bool waking=asleep;
+            if(waking){asleep=false;esp_lcd_panel_disp_on_off(panel,true);}
+            feedback_x=start_x;feedback_y=start_y;feedback_until_us=now+500000;
+            feedback_page=page;feedback_overlay=overlay;
+            /* Wake has immediate visual receipt but never sends an accidental ping. */
+            if(waking){snprintf(action_status,sizeof(action_status),"Awake - tap a button");press_consumed=true;}
+            else if(touch_test){press_consumed=true;}
+            else if(!calibration_stage&&screen_mode!=SCREEN_MESSAGE&&buoy_press_target(page,overlay,start_x,start_y)){
+                int target=buoy_action_target(overlay==2,start_x,start_y);
+                if(overlay==2){
+                    if(buoy_alarm_back(start_x,start_y))overlay=0;
+                    else if(target>=0){alarm_minute=buoy_alarm_step(alarm_minute,target==0?-60:target==1?60:target==2?-5:5);save_alarm();}
+                    else if(buoy_alarm_toggle(start_x,start_y)){alarm_enabled=!alarm_enabled;save_alarm();}
+                }else if(target<2)pending_action=target+1;
+                else if(target==2){overlay=1;content_page[1]=0;pending_action=3;}
+                else overlay=2;
+                press_consumed=true;
+            }
+            dirty=true;xSemaphoreGive(lock);continue;
+        }
+        if(press_consumed||touch_test){press_consumed=false;++touch_releases;dirty=true;xSemaphoreGive(lock);continue;}
         feedback_page=page;feedback_overlay=overlay;
         ++touch_releases;
         last_raw_x=stroke.peak_x;last_raw_y=stroke.peak_y;
@@ -317,17 +348,22 @@ static void poll_touch(void)
         if(asleep){asleep=false;esp_lcd_panel_disp_on_off(panel,true);}
         else if(calibration_stage){
             pending_action=0;
-            if(calibration_stage==1){cal_x0=last_raw_x;cal_y0=last_raw_y;calibration_stage=2;}
-            else {
+            if(calibration_stage==1){affine_valid=false;cal_x0=last_raw_x;cal_y0=last_raw_y;calibration_stage=2;}
+            else if(calibration_stage==2){
                 cal_x1=last_raw_x;cal_y1=last_raw_y;
                 if(abs(cal_x1-cal_x0)<500||abs(cal_y1-cal_y0)<500)calibration_stage=1;
+                else calibration_stage=3;
+            }else{
+                cal_x2=last_raw_x;cal_y2=last_raw_y;
+                affine_valid=buoy_affine_fit(&affine,cal_x0,cal_y0,cal_x1,cal_y1,cal_x2,cal_y2);
+                if(!affine_valid)calibration_stage=1;
                 else{touch_calibrated=true;calibration_stage=0;page=0;overlay=0;save_calibration();}
             }
         }else{
-            touch_x=clamp_pixel(buoy_axis(last_raw_y,cal_y0,cal_y1,40,280),319);
-            touch_y=clamp_pixel(buoy_axis(last_raw_x,cal_x0,cal_x1,40,190),239);
-            int end_x=clamp_pixel(buoy_axis(stroke.last_y,cal_y0,cal_y1,40,280),319);
-            int end_y=clamp_pixel(buoy_axis(stroke.last_x,cal_x0,cal_x1,40,190),239);
+            touch_x=map_x(last_raw_x,last_raw_y);
+            touch_y=map_y(last_raw_x,last_raw_y);
+            int end_x=map_x(stroke.last_x,stroke.last_y);
+            int end_y=map_y(stroke.last_x,stroke.last_y);
             buoy_gesture_t gesture=buoy_gesture(end_x-start_x,end_y-start_y,excursion,stroke.ended_us-stroke.started_us);
             int target=buoy_action_target(overlay==2,touch_x,touch_y);
             if(screen_mode==SCREEN_MESSAGE){
@@ -346,18 +382,16 @@ static void poll_touch(void)
                     if(touch_x>=160&&content_page[which]+1<content_pages[which])++content_page[which];
                     else if(touch_x<160&&content_page[which])--content_page[which];
                 }else if(page==2&&overlay==2){
-                    if(buoy_alarm_back(touch_x,touch_y)){overlay=0;}
-                    else if(target>=0){alarm_minute=buoy_alarm_step(alarm_minute,target==0?-60:target==1?60:target==2?-5:5);save_alarm();}
-                    else if(buoy_alarm_toggle(touch_x,touch_y)){alarm_enabled=!alarm_enabled;save_alarm();}
-                    else if(touch_x<24||touch_x>=296)overlay=0;
+                    /* Controls only activate on down, never by dragging into one. */
+                    if(touch_x<24||touch_x>=296)overlay=0;
                 }else if(overlay==1)overlay=0;
-                else if(page==2&&target>=0){if(target<2)pending_action=target+1;else if(target==2){overlay=1;content_page[1]=0;pending_action=3;}else overlay=2;}
+                else if(page==2&&target>=0){ /* Already handled on press. */ }
                 else{page=buoy_next_page(page,touch_x);if(page==1)pending_action=4;}
             } /* Other drags and long holds deliberately do nothing. */
         }
         if(!calibration_stage){
-            feedback_x=clamp_pixel(buoy_axis(last_raw_y,cal_y0,cal_y1,40,280),319);
-            feedback_y=clamp_pixel(buoy_axis(last_raw_x,cal_x0,cal_x1,40,190),239);
+            feedback_x=map_x(last_raw_x,last_raw_y);
+            feedback_y=map_y(last_raw_x,last_raw_y);
             feedback_until_us=now+300000;
         }
         dirty=true;
@@ -416,15 +450,20 @@ static void flush(lv_display_t *display, const lv_area_t *area, uint8_t *pixels)
     }
 }
 /* Independent, small retained overlay: immediate contact feedback, not success.
- * No calibration, gesture, wake-consumption or outbound-action policy is changed. */
+ * Visual receipt is separate from action success; wake contacts remain consumed. */
 static void render_touch_feedback(int64_t now)
 {
     unsigned contact=atomic_load(&contact_preview);
     bool enabled=!asleep&&!calibration_stage;
+    if(touch_test&&!asleep){
+        claw_box_touch_diagnostics_t d;claw_box_touch_get_diagnostics(&d);
+        lv_obj_remove_flag(test_panel,LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text_fmt(test_label,"TOUCH SELF TEST\nRaw X %u  Y %u\nPressure %u (min %d)\nPixel %d,%d\nNo actions sent\nExit: display.update touchTest=false",d.rawX,d.rawY,d.pressure,CLAW_TOUCH_PRESSURE_THRESHOLD,map_x(d.rawX,d.rawY),map_y(d.rawX,d.rawY));
+    }else lv_obj_add_flag(test_panel,LV_OBJ_FLAG_HIDDEN);
     bool down=enabled&&(contact&(1U<<24));
     if(down){
-        feedback_x=clamp_pixel(buoy_axis(contact&4095,cal_y0,cal_y1,40,280),319);
-        feedback_y=clamp_pixel(buoy_axis((contact>>12)&4095,cal_x0,cal_x1,40,190),239);
+        feedback_x=map_x((contact>>12)&4095,contact&4095);
+        feedback_y=map_y((contact>>12)&4095,contact&4095);
         feedback_until_us=now+300000;
         feedback_page=page;feedback_overlay=overlay;
     }
@@ -495,9 +534,9 @@ static void ui_task(void *arg)
             lv_obj_add_flag(cal_dot,LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(cal_label,LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(alarm_toggle,LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(back_button,LV_OBJ_FLAG_HIDDEN);
             if(calibration_stage){
                 lv_obj_remove_flag(cal_dot,LV_OBJ_FLAG_HIDDEN);lv_obj_remove_flag(cal_label,LV_OBJ_FLAG_HIDDEN);
-                int x=calibration_stage==1?40:calibration_stage==2?280:160,y=calibration_stage==1?40:calibration_stage==2?190:115;
+                int x=calibration_stage==1?40:280,y=calibration_stage==2?190:40;
                 lv_obj_set_pos(cal_dot,x-6,y-6);lv_obj_set_pos(cal_label,50,calibration_stage==3?155:85);
-                lv_label_set_text_fmt(cal_label,"Touch calibration %d/2\nTap the teal dot\nPings disabled",calibration_stage);
+                lv_label_set_text_fmt(cal_label,"Touch calibration %d/3\nTap the teal dot\nPings disabled",calibration_stage);
             }else if(screen_mode==SCREEN_MESSAGE) {
                 lv_obj_remove_flag(message_panel,LV_OBJ_FLAG_HIDDEN);
                 lv_label_set_text_fmt(from_label,"From: %s",sender_text);
@@ -628,12 +667,13 @@ static esp_err_t update_command(esp_openclaw_node_handle_t node,void *ctx,const 
     (void)node;(void)ctx;(void)len;
     cJSON *p=NULL;esp_err_t err=esp_openclaw_node_example_parse_json_params(json,&p,error);if(err!=ESP_OK)return err;
     cJSON *a=cJSON_GetObjectItemCaseSensitive(p,"agenda"),*w=cJSON_GetObjectItemCaseSensitive(p,"weather"),*cal=cJSON_GetObjectItemCaseSensitive(p,"calibrate"),*corners=cJSON_GetObjectItemCaseSensitive(p,"calibrationCorners");
+    cJSON *touchtest=cJSON_GetObjectItemCaseSensitive(p,"touchTest");
     cJSON *brightness=cJSON_GetObjectItemCaseSensitive(p,"brightnessPercent");
     cJSON *kind=cJSON_GetObjectItemCaseSensitive(p,"weatherCondition");
     cJSON *date=cJSON_GetObjectItemCaseSensitive(p,"agendaDate"),*at=cJSON_GetObjectItemCaseSensitive(p,"agendaUpdatedAt"),*wt=cJSON_GetObjectItemCaseSensitive(p,"weatherUpdatedAt");
     cJSON *aa=cJSON_GetObjectItemCaseSensitive(p,"agendaAvailable"),*wa=cJSON_GetObjectItemCaseSensitive(p,"weatherAvailable"),*test=cJSON_GetObjectItemCaseSensitive(p,"pingTestMode"),*wake=cJSON_GetObjectItemCaseSensitive(p,"wake");
     cJSON *pg=cJSON_GetObjectItemCaseSensitive(p,"page"),*ov=cJSON_GetObjectItemCaseSensitive(p,"overlay"),*cp=cJSON_GetObjectItemCaseSensitive(p,"contentPage"),*next=cJSON_GetObjectItemCaseSensitive(p,"messageNext");
-    if((brightness&&(!cJSON_IsNumber(brightness)||brightness->valuedouble!=brightness->valueint||brightness->valueint<1||brightness->valueint>100))||
+    if((touchtest&&!cJSON_IsBool(touchtest))||(brightness&&(!cJSON_IsNumber(brightness)||brightness->valuedouble!=brightness->valueint||brightness->valueint<1||brightness->valueint>100))||
        (a&&(!cJSON_IsString(a)||strlen(a->valuestring)>1024))||(w&&(!cJSON_IsString(w)||strlen(w->valuestring)>512))||
        (kind&&(!w||!cJSON_IsString(kind)||buoy_weather_parse(kind->valuestring)<0))||
        (date&&(!a||!cJSON_IsString(date)||!buoy_valid_date(date->valuestring)))||
@@ -651,9 +691,10 @@ static esp_err_t update_command(esp_openclaw_node_handle_t node,void *ctx,const 
         if(abs(values[2]-values[0])<500||abs(values[3]-values[1])<500){cJSON_Delete(p);return ESP_ERR_INVALID_ARG;}
     }
     xSemaphoreTake(lock,portMAX_DELAY);
+    if(touchtest){touch_test=cJSON_IsTrue(touchtest);pending_action=0;wake_requested=true;}
     if(brightness)backlight_percent=(unsigned)brightness->valueint;
-    if(corners){cal_x0=values[0];cal_y0=values[1];cal_x1=values[2];cal_y1=values[3];touch_calibrated=true;calibration_stage=0;pending_action=0;page=0;overlay=0;wake_requested=true;save_calibration();}
-    if(cJSON_IsTrue(cal)){touch_calibrated=false;calibration_stage=1;pending_action=0;ping_test_mode=true;wake_requested=true;}
+    if(corners){affine_valid=false;cal_x0=values[0];cal_y0=values[1];cal_x1=values[2];cal_y1=values[3];touch_calibrated=true;calibration_stage=0;pending_action=0;page=0;overlay=0;wake_requested=true;save_calibration();}
+    if(cJSON_IsTrue(cal)){touch_test=false;touch_calibrated=false;calibration_stage=1;pending_action=0;ping_test_mode=true;wake_requested=true;}
     if(a){
         snprintf(agenda_text,sizeof(agenda_text),"%s",a->valuestring);
         agenda_updated=at?(time_t)at->valuedouble:now;content_page[0]=0;agenda_offline=aa?!cJSON_IsTrue(aa):false;
@@ -680,8 +721,11 @@ static esp_err_t state_command(esp_openclaw_node_handle_t node,void *ctx,const c
     (void)node;(void)ctx;(void)json;(void)len;(void)error;
     cJSON *p=cJSON_CreateObject();if(!p)return ESP_ERR_NO_MEM;
     xSemaphoreTake(lock,portMAX_DELAY);
-    cJSON_AddStringToObject(p,"firmwareRelease","claw-buoy-v8-portable");
+    cJSON_AddStringToObject(p,"firmwareRelease","claw-buoy-v9-upstream-touch");
     cJSON_AddStringToObject(p,"uiTheme","warm-terminal");
+    cJSON_AddBoolToObject(p,"touchTest",touch_test);cJSON_AddBoolToObject(p,"calibrationAffine",affine_valid);
+    cJSON_AddNumberToObject(p,"calX2",cal_x2);cJSON_AddNumberToObject(p,"calY2",cal_y2);
+    cJSON_AddNumberToObject(p,"touchPresses",touch_presses);cJSON_AddNumberToObject(p,"touchPressureThreshold",CLAW_TOUCH_PRESSURE_THRESHOLD);
     cJSON_AddStringToObject(p,"touchFeedback","contact-halo-and-control-tint");
     cJSON_AddNumberToObject(p,"backlightGpio",CLAW_BACKLIGHT_GPIO);
     cJSON_AddBoolToObject(p,"backlightPwmReady",backlight_ready);
@@ -787,6 +831,10 @@ esp_err_t claw_box_display_start(esp_openclaw_node_handle_t node)
     lv_obj_set_style_bg_opa(sleep_cover,LV_OPA_COVER,0);
     lv_obj_remove_flag(sleep_cover,LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(sleep_cover,LV_OBJ_FLAG_HIDDEN);
+    test_panel=lv_obj_create(lv_layer_top());lv_obj_set_pos(test_panel,0,0);lv_obj_set_size(test_panel,320,240);
+    lv_obj_set_style_bg_color(test_panel,lv_color_hex(BUOY_BG),0);lv_obj_set_style_bg_opa(test_panel,LV_OPA_COVER,0);
+    test_label=lv_label_create(test_panel);lv_obj_set_width(test_label,290);lv_obj_set_style_text_color(test_label,lv_color_hex(BUOY_INK),0);
+    lv_obj_set_style_text_font(test_label,&lv_font_montserrat_14,0);lv_obj_add_flag(test_panel,LV_OBJ_FLAG_HIDDEN);
     touch_halo=lv_obj_create(lv_layer_top());
     lv_obj_remove_style_all(touch_halo);lv_obj_set_size(touch_halo,18,18);
     lv_obj_set_style_radius(touch_halo,LV_RADIUS_CIRCLE,0);
@@ -827,7 +875,7 @@ esp_err_t claw_box_display_start(esp_openclaw_node_handle_t node)
     }
     cal_dot=lv_obj_create(screen);lv_obj_set_size(cal_dot,12,12);lv_obj_set_style_radius(cal_dot,LV_RADIUS_CIRCLE,0);lv_obj_set_style_border_width(cal_dot,0,0);lv_obj_set_style_bg_color(cal_dot,lv_color_hex(BUOY_ACCENT),0);
     cal_label=lv_label_create(screen);lv_obj_set_width(cal_label,222);lv_obj_set_style_text_align(cal_label,LV_TEXT_ALIGN_CENTER,0);
-    alarm_toggle=lv_obj_create(screen);lv_obj_set_pos(alarm_toggle,30,142);lv_obj_set_size(alarm_toggle,260,40);lv_obj_set_style_pad_all(alarm_toggle,0,0);lv_obj_set_style_bg_color(alarm_toggle,lv_color_hex(BUOY_SURFACE),0);lv_obj_remove_flag(alarm_toggle,LV_OBJ_FLAG_SCROLLABLE);
+    alarm_toggle=lv_obj_create(screen);lv_obj_set_pos(alarm_toggle,30,140);lv_obj_set_size(alarm_toggle,260,44);lv_obj_set_style_pad_all(alarm_toggle,0,0);lv_obj_set_style_bg_color(alarm_toggle,lv_color_hex(BUOY_SURFACE),0);lv_obj_remove_flag(alarm_toggle,LV_OBJ_FLAG_SCROLLABLE);
     alarm_toggle_label=lv_label_create(alarm_toggle);
     back_button=lv_obj_create(screen);lv_obj_set_pos(back_button,24,188);lv_obj_set_size(back_button,272,48);
     lv_obj_set_style_pad_all(back_button,0,0);lv_obj_set_style_bg_color(back_button,lv_color_hex(BUOY_ACCENT),0);lv_obj_remove_flag(back_button,LV_OBJ_FLAG_SCROLLABLE);
@@ -915,7 +963,11 @@ esp_err_t claw_box_display_start(esp_openclaw_node_handle_t node)
     if(nvs_open("buoy_ui",NVS_READONLY,&h)==ESP_OK){uint16_t m;uint8_t on;if(nvs_get_u16(h,"alarm_min",&m)==ESP_OK && m<1440)alarm_minute=m;if(nvs_get_u8(h,"alarm_on",&on)==ESP_OK)alarm_enabled=on;nvs_close(h);}
     if(nvs_open("buoy_ui",NVS_READONLY,&h)==ESP_OK){
         bool have=nvs_get_i32(h,"cx0",&cal_x0)==ESP_OK&&nvs_get_i32(h,"cy0",&cal_y0)==ESP_OK&&nvs_get_i32(h,"cx1",&cal_x1)==ESP_OK&&nvs_get_i32(h,"cy1",&cal_y1)==ESP_OK;
-        if(have&&abs(cal_x1-cal_x0)>=500&&abs(cal_y1-cal_y0)>=500){touch_calibrated=true;calibration_stage=0;}nvs_close(h);
+        if(have&&abs(cal_x1-cal_x0)>=500&&abs(cal_y1-cal_y0)>=500){touch_calibrated=true;calibration_stage=0;}uint8_t use_affine=0;
+        if(touch_calibrated&&nvs_get_u8(h,"affine",&use_affine)==ESP_OK&&use_affine&&
+           nvs_get_i32(h,"cx2",&cal_x2)==ESP_OK&&nvs_get_i32(h,"cy2",&cal_y2)==ESP_OK)
+            affine_valid=buoy_affine_fit(&affine,cal_x0,cal_y0,cal_x1,cal_y1,cal_x2,cal_y2);
+        nvs_close(h);
     }
     if(nvs_open("buoy_ui",NVS_READONLY,&h)==ESP_OK){
         uint8_t mode,offline,kind;int64_t updated;size_t bytes=sizeof(weather_text);

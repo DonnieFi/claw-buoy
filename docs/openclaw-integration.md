@@ -6,6 +6,13 @@ Claw Buoy is an ESP32 **OpenClaw node**, not an OpenClaw Gateway fork. It keeps 
 
 Site-specific calendar/location/delivery rules are intentionally excluded and supplied through local private overrides and Gateway setup. This repo does not ship a configured personal Gateway or modify/install Gateway code.
 
+## Current upstream refresh
+
+As of 2026-10-16 the included node/provisioning sources are updated through
+`fb7bbc3ad626018d68d6b7585744d7f574b888c0`. See the [snapshot](../firmware/esp-openclaw-node/SNAPSHOT.md)
+for scope. The initial V8 inventory below is historical; V9 additionally includes
+pressure tuning, press-down controls, affine calibration and a no-send touch test.
+
 ## Initial V8 snapshot comparison baseline
 
 Compared included C/H files byte-for-byte against upstream `openclaw/esp-openclaw-node` commit **9d905d30e5499e7d0d42a566b0f6bbf5c08c42f6**, using the local upstream Git object. This is the captured baseline, **not a claim of parity with current upstream**. This is a focused source snapshot, not a complete upstream checkout. Counts below describe the initial V8 publication, before the portability and modification-notice cleanup. Current source also has configurable time/dark hours, labels and action routing; no additional node protocol behavior was changed. Counts below are line-diff counts; generated logo arrays make raw line counts misleading.

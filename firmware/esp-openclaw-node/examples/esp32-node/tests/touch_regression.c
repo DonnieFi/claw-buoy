@@ -19,9 +19,11 @@ int main(void){
     assert(!claw_box_touch_read(&x,&y));claw_box_touch_get_diagnostics(&d);assert(d.polls==1&&!d.initialized);
     assert(claw_box_touch_start()==ESP_OK);pressure=0;
     assert(!claw_box_touch_read(&x,&y));claw_box_touch_get_diagnostics(&d);assert(d.initialized&&d.irqLevel==1&&d.lowPressureSamples==1);
+    pressure=CLAW_TOUCH_PRESSURE_THRESHOLD-1;assert(!claw_box_touch_read(&x,&y));
+    pressure=CLAW_TOUCH_PRESSURE_THRESHOLD;assert(claw_box_touch_read(&x,&y));
     pressure=500;assert(claw_box_touch_read(&x,&y));assert(x==rx&&y==ry);
-    claw_box_touch_get_diagnostics(&d);assert(d.irqHighSamples==3&&d.validSamples==1&&d.penSamples==0);
-    irq=0;assert(claw_box_touch_read(&x,&y));claw_box_touch_get_diagnostics(&d);assert(d.penSamples==1&&d.validSamples==2);
+    claw_box_touch_get_diagnostics(&d);assert(d.irqHighSamples==5&&d.validSamples==2&&d.penSamples==0);
+    irq=0;assert(claw_box_touch_read(&x,&y));claw_box_touch_get_diagnostics(&d);assert(d.penSamples==1&&d.validSamples==3);
     rx=4095;assert(!claw_box_touch_read(&x,&y));claw_box_touch_get_diagnostics(&d);assert(d.badRawSamples==1);
     spi_fail=1;assert(!claw_box_touch_read(&x,&y));claw_box_touch_get_diagnostics(&d);assert(d.spiErrors==1);
     puts("PASS: production touch reader uninitialized, idle, IRQ-high contact, IRQ-low contact, invalid raw, SPI failure");

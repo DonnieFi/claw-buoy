@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory(prefix='claw-buoy-checks-') as tmp:
         ('touch', ['tests/touch_regression.c', 'main/claw_box_touch.c'], ['tests/stubs', 'main']),
     ]:
         binary = str(Path(tmp) / name)
-        command = [CC, '-std=c11', '-Wall', '-Wextra']
+        command = [CC, '-std=c11', '-Wall', '-Wextra', '-Werror']
         command += ['-I' + str(APP / inc) for inc in includes]
         command += [str(APP / src) for src in sources]
         subprocess.run(command + ['-lm', '-o', binary], check=True)

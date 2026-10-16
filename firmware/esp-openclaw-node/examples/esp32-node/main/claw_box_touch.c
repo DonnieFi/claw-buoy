@@ -26,7 +26,7 @@ esp_err_t claw_box_touch_start(void)
         .quadwp_io_num = -1, .quadhd_io_num = -1, .max_transfer_sz = 3};
     err = spi_bus_initialize(SPI3_HOST, &bus, SPI_DMA_DISABLED);
     if (err != ESP_OK) return err;
-    spi_device_interface_config_t device = {.clock_speed_hz = 1000000,
+    spi_device_interface_config_t device = {.clock_speed_hz = CLAW_TOUCH_SPI_HZ,
         .mode = 0, .spics_io_num = CLAW_TOUCH_CS, .queue_size = 1};
     err = spi_bus_add_device(SPI3_HOST, &device, &touch);
     if (err != ESP_OK) spi_bus_free(SPI3_HOST);
@@ -65,7 +65,7 @@ bool claw_box_touch_read(uint16_t *x, uint16_t *y)
     uint16_t xs[3],ys[3],pressure;
     if(!sample(0xB0,&pressure)){++d.spiErrors;return publish(&d,false);}
     d.pressure=pressure;
-    if(pressure<100){++d.lowPressureSamples;return publish(&d,false);}
+    if(pressure<CLAW_TOUCH_PRESSURE_THRESHOLD){++d.lowPressureSamples;return publish(&d,false);}
     for(int i=0;i<3;++i){
         if(!sample(0xD0,&xs[i])||!sample(0x90,&ys[i])){++d.spiErrors;return publish(&d,false);}
     }
