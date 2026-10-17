@@ -1,6 +1,6 @@
 # V9 touch evaluation
 
-## Baseline
+## Pre-V9 baseline
 
 1. Custom driver samples XPT2046 on SPI3 every 10 ms at 1 MHz.
 2. Z1 pressure must reach 100; three samples per coordinate are median filtered.
@@ -54,9 +54,19 @@ No invented third measurement is generated for the attached unit.
 Host tests cover pressure just below/at threshold, IRQ high/low contacts, bad raw
 readings and SPI failures; initial press/hold/dropout/release events, affine target
 and midpoint mapping, degenerate fits, hit-region separation and existing UI rules.
-Firmware/live verification is reported separately; physical tapping remains needed.
+Firmware/live verification is reported separately. See the hands-on result below.
 
 If resistive touch remains unsatisfactory, a **compatible capacitive 2.8-inch
 panel** is the better hardware direction (e.g. a suitable CST816-based module).
 Match controller, display interface, supply, pinout and enclosure dimensions first;
 this is not a drop-in wiring claim or a tested replacement recommendation.
+
+## Hands-on result — 2026-10-17
+
+The author confirmed that light taps, edge navigation and first-contact wake
+feedback work well on the flashed V9 prototype, then reported that taps work
+very well but swipes feel stuttery. Tap/wake behavior is hands-on confirmed on
+this unit; swipe smoothness remains a known limitation, not a completed fix.
+No physical library A/B test, 2 MHz SPI test or affine-calibration accuracy
+measurement is implied by this feedback. Existing two-point calibration remains
+active until a new three-point calibration is performed.

@@ -10,7 +10,7 @@ A small ESP32 desk companion with a 2.8-inch touchscreen, a claw mascot, room te
 
 ![A day with Claw Buoy: eight-panel screen storyboard](assets/claw-buoy-comic-v1.png)
 
-*Generated concept storyboard with demo content, not screenshots of V8. See [artwork notes](assets/README.md).*
+*Generated concept storyboard with demo content, not screenshots of the current firmware. See [artwork notes](assets/README.md).*
 
 ## Quick start
 
@@ -26,7 +26,7 @@ Optional: print the [V5 enclosure](hardware/enclosure/v5/); read its audit first
 
 - [Parts list / BOM](hardware/PARTS.md) and the GPIO wiring table below.
 - [V5 enclosure](hardware/enclosure/v5/): body/back STL files, parametric OpenSCAD/Python source, preview and geometry audit. **Dimensions and fit are unconfirmed: the enclosure has not been test-fit.**
-- V8 firmware source, mascot assets, portable build configuration, host tests and CI.
+- V9 firmware source, mascot assets, portable build configuration, host tests and CI.
 - Hero, comic storyboard and selected concept renders; not measured hardware photographs.
 - [OpenClaw integration and upstream change inventory](docs/openclaw-integration.md).
 
@@ -34,12 +34,24 @@ Optional: print the [V5 enclosure](hardware/enclosure/v5/); read its audit first
 
 Artwork provenance and redistribution scope are documented in [artwork notes](assets/README.md).
 
+## Repository guide
+
+| Directory | Contents |
+| --- | --- |
+| `firmware/esp-openclaw-node/` | Upstream-derived ESP-IDF node source, Claw Buoy UI and host tests |
+| `hardware/` | Parts list, V5 enclosure source, STL files and geometry audit |
+| `docs/` | OpenClaw integration inventory and V9 touch evaluation |
+| `assets/` | Project banner, concept storyboard and artwork provenance |
+| `design/` | Historical concept renders, not construction drawings |
+| `tools/` | Hardware-independent regression runner |
+
 ## Project status
 
 This is a working hardware prototype, not a finished appliance.
 
-- **V7 firmware** was deployed and checked on the author's unit: gateway reconnection, sensor reads, UI commands, five-minute idle sleep, and physically confirmed backlight-off. Touch wake works but needs tuning; it sometimes took several taps.
-- **V8 baseline** is built, USB-flashed and regression-checked (host tests plus deployed checks of sensors, UI state, offline/stale content and notifications). Actual LCD appearance, touch feel and V8 idle/wake have not been physically verified.
+- **V9 firmware** is USB-flashed and running on the author's ESP32-WROOM prototype. Clean firmware builds, host/sanitizer tests, CI and no-send live regression passed; gateway reconnection, sensor reads and settings preservation were checked.
+- **Hands-on touch feedback (2026-10-17):** light taps, edge navigation and first-contact wake feedback work well on the author's unit. **Swipes still feel stuttery** and need further tuning; smooth gesture navigation is not claimed.
+- **Calibration:** the existing two-point calibration remains in use on the author's unit. Three-point affine calibration is implemented and host-tested, but its physical accuracy has not yet been verified.
 - **Enclosure** dimensions and print fit are unconfirmed; it has not been test-fit.
 
 ### V9 upstream and touch update
@@ -50,7 +62,7 @@ This is a working hardware prototype, not a finished appliance.
 - Sleep wakes on initial contact with a visible halo/backlight receipt; its release does not send a ping or navigate. Tap again to choose a control.
 - New calibrations use **three-point affine** fitting, persisted to NVS. Existing two-point calibration remains valid. Legacy `calibrationCorners: [x0,y0,x1,y1]` updates deliberately select legacy mapping.
 - Touch self-test: `display.update {"touchTest":true}` shows raw X/Y, pressure, mapped position and a contact dot, with actions suppressed. Exit with `{"touchTest":false}`. Calibration starts with `{"calibrate":true}` and disables pings until restored deliberately.
-- Automated checks do not establish physical sensitivity, edge accuracy, LCD appearance or subjective responsiveness. See [touch evaluation](docs/touch-v9.md).
+- Automated checks do not establish physical responsiveness. The hands-on results above apply to one prototype, not all display modules. See [touch evaluation](docs/touch-v9.md).
 
 ## Hardware and wiring
 
