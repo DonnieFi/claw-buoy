@@ -70,6 +70,11 @@ only `type`, `nonce`, `ts`, `auth` and `pluginSurfaceUrls` inside `payload`. A
 future gateway hello-ok/challenge field outside that allowlist would be dropped
 for connecting-state frames. No current field is affected.
 
+## Filed reports
+
+- Claw Buoy build-config trap: https://github.com/DonnieFi/claw-buoy/issues/1
+- Upstream example build-docs warning: https://github.com/openclaw/esp-openclaw-node/issues/234
+
 ## Artifacts
 
 - Firmware: `firmware/esp-openclaw-node/examples/esp32-node/build-claw-box/esp_openclaw_node_esp32.bin`
