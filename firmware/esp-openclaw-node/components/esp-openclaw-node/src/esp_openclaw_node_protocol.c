@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 /* Modified by Donnie Fiander for Claw Buoy, 2026-10-15.
- * Compacts the connecting-state hello-ok frame before cJSON parsing, and logs frame size, parse-error offset and heap figures (no frame content) when a gateway frame fails to parse.
+ * Upstream bounded handshake parsing adopted 2026-11-07, replacing the local
+ * hello-ok compaction pre-pass. Local connect diagnostics are retained.
  */
 
-#include "esp_openclaw_node_hello_compact.h"
 #include "esp_openclaw_node_internal.h"
+#include "esp_openclaw_node_handshake.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -82,7 +83,8 @@ static void log_invoke_reply(
 static bool websocket_send_json(
     esp_openclaw_node_handle_t node,
     cJSON *root,
-    invoke_reply_diagnostic_t *diagnostic)
+    invoke_reply_diagnostic_t *diagnostic,
+    bool connecting)
 {
     int64_t started_us = diagnostic != NULL ? esp_timer_get_time() : 0;
     log_invoke_reply(diagnostic, REPLY_SERIALIZE_BEGIN, 0);
@@ -102,6 +104,16 @@ static bool websocket_send_json(
     }
     started_us = diagnostic != NULL ? esp_timer_get_time() : 0;
     log_invoke_reply(diagnostic, REPLY_SEND_BEGIN, 0);
+    if (connecting) {
+        esp_openclaw_node_lock_state(node);
+        bool allowed = node->state == ESP_OPENCLAW_NODE_INTERNAL_CONNECTING &&
+            !esp_openclaw_node_active_connect_cancelled_locked(node);
+        esp_openclaw_node_unlock_state(node);
+        if (!allowed) {
+            free(json);
+            return false;
+        }
+    }
     int written = node->websocket_client_ops->send_text(
         node->ws,
         json,
@@ -138,6 +150,7 @@ static void invoke_gateway_callback(
 
 void esp_openclaw_node_send_gateway_request(
     esp_openclaw_node_handle_t node,
+    uint32_t transport_id,
     const char *method,
     const char *params_json,
     esp_openclaw_node_gateway_request_cb_t callback,
@@ -147,6 +160,15 @@ void esp_openclaw_node_send_gateway_request(
     char request_id[40] = {0};
 
     esp_openclaw_node_lock_state(node);
+    /* Accepted RPCs belong to one transport lifetime, including when the
+     * replacement reconnects to the same URI. Never replay them there. */
+    if (transport_id != node->active_transport_id || transport_id == 0) {
+        esp_openclaw_node_unlock_state(node);
+        invoke_gateway_callback(
+            node, callback, user_ctx, false, NULL,
+            "STALE_CONNECTION", "Gateway connection changed before request was sent");
+        return;
+    }
     if (node->state == ESP_OPENCLAW_NODE_INTERNAL_READY && node->ws != NULL) {
         for (size_t i = 0; i < ESP_OPENCLAW_NODE_MAX_PENDING_REQUESTS; ++i) {
             if (!node->pending_requests[i].in_use) {
@@ -205,7 +227,7 @@ void esp_openclaw_node_send_gateway_request(
     cJSON_AddStringToObject(root, "id", request_id);
     cJSON_AddStringToObject(root, "method", method);
     cJSON_AddItemToObject(root, "params", params);
-    if (!websocket_send_json(node, root, NULL)) {
+    if (!websocket_send_json(node, root, NULL, false)) {
         esp_openclaw_node_lock_state(node);
         memset(&node->pending_requests[slot_index], 0, sizeof(node->pending_requests[slot_index]));
         esp_openclaw_node_unlock_state(node);
@@ -460,7 +482,7 @@ static bool send_connect_request(
         return false;
     }
 
-    bool ok = websocket_send_json(node, root, NULL);
+    bool ok = websocket_send_json(node, root, NULL, true);
     cJSON_Delete(root);
     if (!ok) {
         esp_openclaw_node_lock_state(node);
@@ -526,7 +548,7 @@ static void send_invoke_result(
 
     cJSON_AddItemToObject(root, "params", params);
     log_invoke_reply(diagnostic, REPLY_ENVELOPE_END, started_us);
-    if (!websocket_send_json(node, root, diagnostic)) {
+    if (!websocket_send_json(node, root, diagnostic, false)) {
         ESP_LOGW(ESP_OPENCLAW_NODE_TAG, "failed sending invoke result");
     }
     cJSON_Delete(root);
@@ -552,6 +574,50 @@ static esp_err_t build_connect_response_session_update(
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
+}
+
+static esp_err_t persist_handoff_device_token(
+    esp_openclaw_node_handle_t node,
+    const char *role,
+    const char *token)
+{
+    esp_openclaw_node_persisted_session_t stored = {0};
+    ESP_RETURN_ON_ERROR(
+        esp_openclaw_node_persisted_session_load(role, &stored),
+        ESP_OPENCLAW_NODE_TAG,
+        "load handed-off role session");
+    esp_openclaw_node_persisted_session_t update = {
+        .version = 1,
+        .gateway_uri = esp_openclaw_node_duplicate_string(
+            esp_openclaw_node_trimmed_or_null(node->transport_gateway_uri)),
+        .device_token = esp_openclaw_node_duplicate_string(token),
+    };
+    if (update.gateway_uri == NULL || update.device_token == NULL) {
+        esp_openclaw_node_persisted_session_free(&stored);
+        esp_openclaw_node_persisted_session_free(&update);
+        return ESP_ERR_NO_MEM;
+    }
+    /* Loading the sibling role can block. Revalidate before committing, and
+     * serialize this write with cancellation just like the current-role store. */
+    esp_openclaw_node_lock_state(node);
+    bool authorized = node->state == ESP_OPENCLAW_NODE_INTERNAL_CONNECTING &&
+        node->pending_connect_id[0] != '\0' &&
+        !esp_openclaw_node_active_connect_cancelled_locked(node);
+    esp_err_t err = authorized
+        ? esp_openclaw_node_persisted_session_store(role, &stored, &update)
+        : ESP_ERR_INVALID_STATE;
+    if (err == ESP_OK) {
+        esp_openclaw_node_note_connect_credentials_saved_locked(node);
+    }
+    esp_openclaw_node_unlock_state(node);
+    ESP_LOGI(
+        ESP_OPENCLAW_NODE_TAG,
+        "connect_diag stage=handoff_store role=%s target=%s store_attempted=%d local_err=%d(%s)",
+        connect_diagnostic_role(node), strcmp(role, "operator") == 0 ? "operator" : "node",
+        authorized, (int)err, esp_err_to_name(err));
+    esp_openclaw_node_persisted_session_free(&stored);
+    esp_openclaw_node_persisted_session_free(&update);
+    return err;
 }
 
 static esp_err_t persist_handoff_device_tokens(
@@ -595,37 +661,10 @@ static esp_err_t persist_handoff_device_tokens(
             continue;
         }
 
-        esp_openclaw_node_persisted_session_t stored = {0};
         ESP_RETURN_ON_ERROR(
-            esp_openclaw_node_persisted_session_load(role_text, &stored),
+            persist_handoff_device_token(node, role_text, token_text),
             ESP_OPENCLAW_NODE_TAG,
-            "load handed-off role session");
-        esp_openclaw_node_persisted_session_t update = {
-            .version = 1,
-            .gateway_uri = esp_openclaw_node_duplicate_string(
-                esp_openclaw_node_trimmed_or_null(node->transport_gateway_uri)),
-            .device_token = esp_openclaw_node_duplicate_string(token_text),
-        };
-        if (update.gateway_uri == NULL || update.device_token == NULL) {
-            esp_openclaw_node_persisted_session_free(&stored);
-            esp_openclaw_node_persisted_session_free(&update);
-            return ESP_ERR_NO_MEM;
-        }
-        esp_err_t err = esp_openclaw_node_persisted_session_store(
-            role_text,
-            &stored,
-            &update);
-        ESP_LOGI(
-            ESP_OPENCLAW_NODE_TAG,
-            "connect_diag stage=handoff_store role=%s target=%s store_attempted=1 local_err=%d(%s)",
-            connect_diagnostic_role(node),
-            strcmp(role_text, "operator") == 0 ? "operator" : "node",
-            (int)err, esp_err_to_name(err));
-        esp_openclaw_node_persisted_session_free(&stored);
-        esp_openclaw_node_persisted_session_free(&update);
-        if (err != ESP_OK) {
-            return err;
-        }
+            "store handed-off role session");
     }
     if (!operator_entry_present) {
         ESP_LOGI(
@@ -650,7 +689,8 @@ static connect_response_finalize_result_t finalize_connect_response_success(
     esp_openclaw_node_lock_state(node);
     result.state = node->state;
     if (node->state != ESP_OPENCLAW_NODE_INTERNAL_CONNECTING ||
-        node->pending_connect_id[0] == '\0') {
+        node->pending_connect_id[0] == '\0' ||
+        esp_openclaw_node_active_connect_cancelled_locked(node)) {
         esp_openclaw_node_unlock_state(node);
         ESP_LOGI(
             ESP_OPENCLAW_NODE_TAG,
@@ -669,6 +709,12 @@ static connect_response_finalize_result_t finalize_connect_response_success(
         free(node->plugin_surface_urls_json);
         node->plugin_surface_urls_json = plugin_surface_urls_json;
         node->state = ESP_OPENCLAW_NODE_INTERNAL_READY;
+        esp_openclaw_node_note_connect_credentials_saved_locked(node);
+        if (node->active_connect_attempt_id != 0 &&
+            node->connect_attempt.id == node->active_connect_attempt_id) {
+            node->connect_attempt.state = ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_SUCCEEDED;
+            node->connect_attempt.connection_id = node->active_transport_id;
+        }
         /* Do NOT clear pending_control here: this attempt's CONNECT
          * reservation was already consumed when the transport started, so
          * anything present now is a queued disconnect/preempt that must still
@@ -1072,31 +1118,22 @@ void esp_openclaw_node_process_gateway_message(
     esp_openclaw_node_handle_t node,
     const char *text)
 {
-    /* Log metadata only: gateway frames can contain authentication secrets. */
-    const size_t frame_length = strlen(text);
     const size_t heap_before = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     const size_t largest_before = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    const char *parse_end = NULL;
     esp_openclaw_node_lock_state(node);
-    const bool connecting = node->state == ESP_OPENCLAW_NODE_INTERNAL_CONNECTING;
+    bool handshake = esp_openclaw_node_state_is_connecting(node->state);
     esp_openclaw_node_unlock_state(node);
-    char *compact = connecting ? esp_openclaw_node_compact_hello(text) : NULL;
-    const char *parse_text = compact != NULL ? compact : text;
-    cJSON *root = cJSON_ParseWithOpts(parse_text, &parse_end, false);
+    size_t length = strlen(text);
+    cJSON *root = handshake ? esp_openclaw_node_parse_handshake(text, length) :
+        esp_openclaw_node_json_strings_valid(text, length) ? cJSON_Parse(text) : NULL;
     if (root == NULL) {
-        const uintptr_t start = (uintptr_t)parse_text;
-        const uintptr_t end = (uintptr_t)parse_end;
-        const size_t error_offset = end >= start && end - start <= frame_length
-            ? (size_t)(end - start) : SIZE_MAX;
         ESP_LOGW(ESP_OPENCLAW_NODE_TAG,
-                 "invalid gateway JSON frame: bytes=%zu error_offset=%zu "
-                 "heap_before=%zu largest_before=%zu heap_after=%zu",
-                 frame_length, error_offset, heap_before, largest_before,
+                 "invalid gateway JSON frame: bytes=%zu heap_before=%zu "
+                 "largest_before=%zu heap_after=%zu",
+                 length, heap_before, largest_before,
                  heap_caps_get_free_size(MALLOC_CAP_8BIT));
-        free(compact);
         return;
     }
-    free(compact);
 
     cJSON *type = cJSON_GetObjectItemCaseSensitive(root, "type");
     if (!cJSON_IsString(type) || type->valuestring == NULL) {

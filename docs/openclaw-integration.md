@@ -8,10 +8,20 @@ Site-specific calendar/location/delivery rules are intentionally excluded and su
 
 ## Current upstream refresh
 
-As of 2026-10-16 the included node/provisioning sources are updated through
-`fb7bbc3ad626018d68d6b7585744d7f574b888c0`. See the [snapshot](../firmware/esp-openclaw-node/SNAPSHOT.md)
+As of 2026-11-07 the included node/provisioning sources are updated through
+`38c5ab2f5838940fd81d0e3235d2a28eb239fccc`. See the [snapshot](../firmware/esp-openclaw-node/SNAPSHOT.md)
 for scope. The initial V8 inventory below is historical; V9 additionally includes
 pressure tuning, press-down controls, affine calibration and a no-send touch test.
+
+The 2026-11-07 refresh imports upstream's bounded handshake parser
+(`esp_openclaw_node_handshake.c`), connection-lease and setup-session work, and
+the custom trusted-root bundle at
+`firmware/esp-openclaw-node/certificates/public-roots.pem` selected by
+`examples/esp32-node/sdkconfig.defaults`. It also includes the ESP32-S3
+Security2 guard script/patch referenced by the provisioning component; the ESP32
+build does not execute that guard. The local hello-compaction patch and vendored
+jsmn parser were removed because the upstream parser supersedes them; the local
+metadata-only protocol diagnostics remain.
 
 ## Initial V8 snapshot comparison baseline
 
@@ -19,9 +29,17 @@ Compared included C/H files byte-for-byte against upstream `openclaw/esp-opencla
 
 ## Node library boundary
 
-Only **one existing component C/H file** differs: `esp_openclaw_node_protocol.c` (+26 / −4). It adds metadata-only heap/parse diagnostics and compacts successful hello responses before allocating the cJSON tree while connecting. Added support: `esp_openclaw_node_hello_compact.h` (94 lines) and the MIT-licensed vendored jsmn parser (471 lines). Authentication and plugin URL fields consumed by the node are retained. This is a local compatibility/memory patch, not a new wire protocol.
+At the initial V8 baseline, only **one existing component C/H file** differed: `esp_openclaw_node_protocol.c` (+26 / −4). It added metadata-only heap/parse diagnostics and compacted successful hello responses before allocating the cJSON tree while connecting. Added support: `esp_openclaw_node_hello_compact.h` (94 lines) and the MIT-licensed vendored jsmn parser (471 lines). Authentication and plugin URL fields consumed by the node were retained. This was a local compatibility/memory patch, not a new wire protocol.
 
-All other included existing component C/H files, including runtime, public node API and provisioning sources, match that baseline. This statement applies to the published snapshot, not other historical working checkouts.
+The 2026-11-07 refresh removes that local pre-pass and vendored parser:
+upstream's `esp_openclaw_node_handshake.c` now provides bounded handshake
+parsing and JSON string validation. The protocol diagnostics remain. The rest of
+this section describes the historical V8 inventory, not the current snapshot.
+
+At the V8 baseline, all other included existing component C/H files, including
+runtime, public node API and provisioning sources, matched that baseline. This
+statement applies to the published snapshot, not other historical working
+checkouts.
 
 ## Application boundary
 
@@ -57,5 +75,8 @@ Most customization lives in the ESP32 example: display/touch UI, PNG-derived log
 | `examples/esp32-node/tests/stubs/freertos/FreeRTOS.h` | added | 5 | 0 |
 | `examples/esp32-node/tests/touch_regression.c` | added | 28 | 0 |
 | `examples/esp32-node/tests/ui_regression.c` | added | 92 | 0 |
+
+The `esp_openclaw_node_hello_compact.h` and `vendor/jsmn.h` rows record the
+historical V8 publication; both files were removed in the 2026-11-07 refresh.
 
 This inventory excludes non-C/H build files, enclosure files and documentation. No claim is made that local patches have been upstreamed.

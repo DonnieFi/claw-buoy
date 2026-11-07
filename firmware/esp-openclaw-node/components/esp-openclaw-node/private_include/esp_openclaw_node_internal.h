@@ -99,6 +99,7 @@ typedef struct {
     esp_openclaw_node_gateway_request_cb_t request_cb;
     void *request_ctx;
     esp_openclaw_node_connect_request_source_t connect_source;
+    esp_openclaw_node_connect_attempt_id_t connect_attempt_id;
 } esp_openclaw_node_work_message_t;
 
 typedef struct {
@@ -166,6 +167,14 @@ struct esp_openclaw_node {
     esp_openclaw_node_config_t config;
     esp_openclaw_node_internal_state_t state;
     esp_openclaw_node_pending_control_request_t pending_control;
+    esp_openclaw_node_connect_lease_t connect_lease;
+    uint64_t connect_lease_generation;
+    bool connect_request_pending;
+    esp_openclaw_node_connect_attempt_id_t next_connect_attempt_id;
+    esp_openclaw_node_connect_attempt_id_t active_connect_attempt_id;
+    esp_openclaw_node_connect_attempt_t connect_attempt;
+    esp_openclaw_node_connect_authorize_t connect_authorize;
+    void *connect_authorize_context;
     esp_websocket_client_handle_t ws;
     esp_openclaw_node_transport_event_ctx_t *transport_ctx;
     uint32_t next_transport_id;
@@ -287,6 +296,9 @@ esp_err_t esp_openclaw_node_register_capability_internal(
 esp_err_t esp_openclaw_node_register_scope_internal(
     esp_openclaw_node_handle_t node,
     const char *scope);
+esp_err_t esp_openclaw_node_unregister_scope_internal(
+    esp_openclaw_node_handle_t node,
+    const char *scope);
 esp_err_t esp_openclaw_node_register_command_internal(
     esp_openclaw_node_handle_t node,
     const esp_openclaw_node_command_t *command);
@@ -312,6 +324,7 @@ void esp_openclaw_node_process_gateway_message(
     const char *text);
 void esp_openclaw_node_send_gateway_request(
     esp_openclaw_node_handle_t node,
+    uint32_t transport_id,
     const char *method,
     const char *params_json,
     esp_openclaw_node_gateway_request_cb_t callback,
@@ -342,11 +355,30 @@ void esp_openclaw_node_enqueue_work_message_from_callback(
 void esp_openclaw_node_task(void *arg);
 esp_err_t esp_openclaw_node_submit_connect_request(
     esp_openclaw_node_handle_t node,
-    esp_openclaw_node_connect_request_source_t *connect_source);
-esp_err_t esp_openclaw_node_submit_disconnect_request(
+    esp_openclaw_node_connect_request_source_t *connect_source,
+    esp_openclaw_node_connect_lease_t lease,
+    uint64_t generation,
+    esp_openclaw_node_connect_attempt_id_t *out_attempt,
+    esp_openclaw_node_connect_authorize_t authorize,
+    void *context);
+void esp_openclaw_node_note_connect_credentials_saved_locked(
     esp_openclaw_node_handle_t node);
+bool esp_openclaw_node_connect_authority_pending_locked(esp_openclaw_node_handle_t node);
+bool esp_openclaw_node_connect_cancel_pending_locked(esp_openclaw_node_handle_t node);
+bool esp_openclaw_node_connect_attempt_cancelled_locked(
+    esp_openclaw_node_handle_t node, esp_openclaw_node_connect_attempt_id_t attempt);
+bool esp_openclaw_node_active_connect_cancelled_locked(esp_openclaw_node_handle_t node);
+bool esp_openclaw_node_cancel_active_connect_if_requested(esp_openclaw_node_handle_t node);
+bool esp_openclaw_node_connect_lease_matches_locked(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease,
+    uint64_t generation);
+esp_err_t esp_openclaw_node_submit_disconnect_request(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease);
 esp_err_t esp_openclaw_node_submit_gateway_request(
     esp_openclaw_node_handle_t node,
+    uint32_t connection_id,
     const char *method,
     const char *params_json,
     esp_openclaw_node_gateway_request_cb_t callback,

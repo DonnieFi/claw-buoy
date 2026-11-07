@@ -2,9 +2,105 @@
 
 ## Unreleased
 
+- Use the standard GitHub Actions runtime budget for CodeQL instead of the rollout-specific 20-minute job cap.
+
+- Batch main CodeQL security scans every six hours while retaining pull request and manual analysis.
+
+- Add local M5Dial phone setup with QR/manual discovery, painted comparison confirmation, fresh encoder/touch input, and cancellation before navigation or screen-off. USB setup remains available.
+
+- Add local native Watch phone setup with QR/manual discovery, painted comparison confirmation, fresh touch/BOOT input, and cancellation before screen replacement or sleep. Tab5 keeps USB setup.
+
+- Add shared local phone-setup presentation with QR/manual details and comparison confirmation gated on completed painting and fresh physical input. Board entries remain separate work.
+
+- Guard native Watch and M5Dial Security2 salt generation against short SDK allocations with a pinned, source-verified ESP-IDF patch, recording its identity in firmware bundles. Short salts fail safely before use; BLE setup presentation remains separate work.
+
+- Provide native setup bootstrap entropy under existing Wi-Fi ownership, requiring active nonsleeping RF without changing radio configuration or reconnect policy. Down, busy and remote radios fail without producing a seed.
+
+- Add a shared native Watch/Dial phone-setup runtime with ephemeral Security2 credentials, bounded local controls, synchronous cancel and owner-task BLE/native-operation draining. Device screens and phone integration remain separate work.
+
+- Define bounded phone-setup responses with explicit public result codes, operation receipts, exact-attempt save observations, and scan truncation. Dispatch and BLE/mobile integration remain separate work.
+
+- Route bounded phone-setup requests through the canonical session, transfer, Wi-Fi and Gateway owners, with immediate admission receipts, explicit observation mapping, and cancellation draining. BLE/mobile adapters remain separate work.
+
+- Define bounded phone-setup application requests with exact generation/operation IDs and allocation-free decoding of Wi-Fi credentials and setup codes. Response messages, dispatch, and BLE/mobile integration remain separate work.
+
+- Add bounded phone-setup transfer assembly with checked retries, repeatable response pulls, live peer authorization, and credential-buffer wiping. BLE and mobile integration remain separate work.
+
+- Reveal long conversation titles on the focused M5Dial row and reader heading, keeping neighboring rows still and selection unchanged.
+
+- Bind confirmed Gateway setup operations to native connection ownership, live authority, exact outcomes, cancellation draining, and explicit reconnect handback.
+
+- Recheck live setup authority on tracked Gateway requests before connection and credential side effects.
+
+- Cancel exact queued or active Gateway setup attempts independently of queue capacity. Keep cancellation pending until credentials or transport drain, and fence later token writes while preserving earlier saved effects.
+
+- Add lease-bound Gateway connection attempts with exact request IDs, bounded outcome snapshots, and saved-credential effects. Old connection events cannot complete a queued replacement.
+
+- Add an opt-in connection-control lease for setup owners, excluding competing console and saved-session requests without disconnecting the current Gateway. Revalidate ownership after credential loading and keep replacement work reserved through old-session callbacks.
+
+- Bind confirmed setup sessions to native Wi-Fi attempts, retaining ownership between operations and until cancellation drains, with correlated failure and recovery receipts.
+
+- Add native-radio Wi-Fi setup attempts with correlated outcomes, authority checks, cancellation draining, and explicit recovery after drain failures. Remote-radio backends remain unsupported by this API.
+
+- Keep Wi-Fi status and connection waiters disconnected after Disconnect or Forget, even when an older IP notification arrives afterward.
+
+- Add exclusive Wi-Fi setup admission with fenced scan access, deferred automatic reconnects, and rejection of competing console mutations. This preserves the current link; asynchronous setup joins and BLE integration remain separate work.
+
+- Add a shared setup-session API for Watch and Dial integrations, with local confirmation, live peer checks, bounded operation receipts, and cancellation draining. BLE/mobile adapters and device setup screens remain separate work.
+
+- Guard native Watch/Dial Security2 callbacks with exclusive transport admission, authenticated peer revocation, bounded application crypto buffers, and checked sensitive-log suppression. BLE server, endpoint and phone integration remain separate work.
+
+- Add a bounded phone-setup endpoint mailbox with explicit fragment/pull retries, canonical owner dispatch, peer/generation fencing and cached-reply expiry. BLE server, device screens and phone integration remain separate work.
+
+- Define a shared bounded setup-frame codec for future Watch/Dial phone provisioning, with explicit request, response, acknowledgment, pull, and error shapes. BLE transport and device pairing remain separate work.
+
+- Serialize explicit Wi-Fi credential, connect, disconnect, and scan operations so concurrent commands cannot change station configuration during an active scan.
+
+- Allow an idle client to remove a locally advertised scope before reconnecting, without changing stored Gateway grants or credentials.
+
+- Count discarded AFE input frames as errors and expose capture-read and fetch timing in room/watch audio diagnostics.
+- Give the watch's capture-copy pipeline equal priority with audio decoding while preserving its core and stack.
+
+- Reduce watch voice-call display load by skipping unchanged mascot redraws, resting large image transforms during calls, and separating audio codec work from display timing.
+
+- Defer room/watch call-timeout cancellation and logging to the Talk worker, preventing timer-service stack exhaustion while preserving stale-call protection.
+- Add room/watch `talk.say` to queue a bounded spoken confirmation on the current voice call through `talk.client.say`, with visible Gateway failures and no retargeting after call replacement.
+- Let the configuring agent session report a M5Dial action outcome with `dial.complete`; correlate replies with the latest press and reject stale, duplicate, reconfigured, or reconnected results.
+- Use the mobile app's animated OpenClaw lobster on the 1.8-inch watch, with blinking, claw and antenna movement, mood expressions, and speech-reactive mouth animation. Other board displays are unchanged.
+- Honor the Watch's reading-size preference in agent names, IDs, and directory status messages while preserving compact or comfortable row spacing.
+- Keep long Watch agent identities readable in a scrollable detail view, with reading-size-aware text and fixed actions above the live-call footer.
+- Honor the Watch's reading size in conversation titles and summaries, keeping long text within separate single-line rows in both list densities.
+- Follow reading size in Watch and Dial conversation-reader headings, revealing long titles while preserving menu styles and reading space.
+
+- Add on-device English letter/digit handwriting candidates to the Watch and Tab5 text composer, with explicit candidate acceptance and a separate Review/Send step.
+
+## 1.3.1 - 2026-10-23
+
+**Highlights:** Security: remove affected CA roots from the examples' trust bundle; a firmware rebuild is required to apply the trust change.
+
+- Remove the affected AAA Certificate Services and emSign ECC Root CA - G3 roots from the maintained examples' public CA bundle; existing firmware must be rebuilt with the updated bundle to apply the trust change. Thanks @joshavant. (#91)
+
+Qualification scope: host checks and CI firmware builds only. Publication requires all seven firmware builds to pass on the release commit. No hardware flashing, on-device Unity execution, live Gateway pairing/reconnect, acoustic wake/Talk, display/Canvas, camera/DMA, SD-card removal, or C6 coprocessor qualification is claimed for this release.
+
+## 1.3.0 - 2026-10-20
+
+**Highlights:** Local Start/Stop Talk controls, opt-in voice-agent owner actions, and safer gestures and connection recovery for room, watch, and M5Dial nodes.
+
+- Add local Start Talk / Stop Talk controls over the room/watch home screen, face, and Canvas, using the existing Talk admission and teardown lifecycle.
+- Add an opt-in room/watch setting for voice-agent owner actions, including other-node control, requiring separate Gateway approval and preserving read-only voice access by default.
+- Wake a dark room/watch display before accepting local Talk input, so an invisible control cannot start a call on the first touch.
+- Keep room/watch Talk presses bound to the displayed action; cancel held gestures when Start/Stop availability changes instead of sending the opposite action.
+- Cancel held M5Dial button and touch gestures when commands replace the view or control, preventing a release from confirming a newly configured action.
+- Bind queued Gateway RPCs and M5Dial agent actions to their active connection; reject stale work and replies, retain controls across same-Gateway reconnects, and clear action destinations when the Gateway changes.
+- Reuse the room supervisor for NVS-backed node/operator reconnects, avoiding temporary internal stacks that can prevent WebSocket tasks from starting.
 - Reserve the AFE worker's internal stack for the audio source lifetime so repeated Talk transitions cannot lose microphone capture to fragmented RAM.
-- Clarify voice-node pairing for room/watch profiles and document live Talk verification without assuming an automatic greeting.
 - Reduce watch display DMA buffers to leave internal RAM for Talk capture transitions and both Gateway connections; include the error code when AFE initialization fails.
+- Suppress speaker feedback on single-microphone room/watch boards during playback and its acoustic tail.
+- Include the visible M5Dial message heading and text in status readback.
+- Explain the separate device and node command approvals required by manual Gateway enrollment, including recovery when a connected node reports `PAIRING_CHANGED`.
+- Clarify voice-node pairing for room/watch profiles and document live Talk verification without assuming an automatic greeting.
+
+Qualification scope: host checks and CI firmware builds only. Publication requires all seven firmware builds to pass on the release commit. No hardware flashing, on-device Unity execution, live Gateway pairing/reconnect, acoustic wake/Talk, display/Canvas, camera/DMA, SD-card removal, or C6 coprocessor qualification is claimed for this release.
 
 ## 1.2.0 - 2026-10-16
 

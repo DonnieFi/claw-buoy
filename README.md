@@ -56,7 +56,8 @@ This is a working hardware prototype, not a finished appliance.
 
 ### V9 upstream and touch update
 
-- Node/provisioning sources refreshed through upstream `fb7bbc3`; retains the WROOM/no-PSRAM configuration and local handshake memory patch.
+- Node/provisioning sources refreshed through upstream `38c5ab2f` (Nov 3 snapshot); retains the WROOM/no-PSRAM configuration. The local handshake memory patch was retired in favor of upstream's bounded handshake parser.
+- **2026-11-07 upstream sync:** imported through `38c5ab2f`, built, flashed and verified on the prototype (ILI9341 display, Wi-Fi and gateway handshake). Findings are recorded in the [sync notes](docs/upstream-sync-2026-11-07.md).
 - Custom XPT2046 acquisition retained: named pressure threshold **50**, median filtering, **10 ms** sampling and **1 MHz** SPI. A 2 MHz clock is not enabled without signal verification.
 - Main action/alarm buttons activate once on **press-down**. A drag starting on a button therefore activates that button; releasing or dragging afterward cannot undo an action. Page swipes, content navigation and calibration remain release-classified. Main targets are at least 44 px high.
 - Sleep wakes on initial contact with a visible halo/backlight receipt; its release does not send a ping or navigate. Tap again to choose a control.
@@ -156,7 +157,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Keep live
 
 ## License and credits
 
-Project-owned materials use [MIT](LICENSE). The firmware under `firmware/esp-openclaw-node/` is a snapshot of [openclaw/esp-openclaw-node](https://github.com/openclaw/esp-openclaw-node) (upstream commit `9d905d3`) with local modifications. It retains its [Apache-2.0 license](firmware/esp-openclaw-node/LICENSE); see its [SNAPSHOT.md](firmware/esp-openclaw-node/SNAPSHOT.md) and the [change inventory](docs/openclaw-integration.md). The vendored jsmn parser retains its MIT notice. Registry dependencies retain their respective licenses; a source repository is not a license grant for upstream names, logos, or trademarks.
+Project-owned materials use [MIT](LICENSE). The firmware under `firmware/esp-openclaw-node/` is a snapshot of [openclaw/esp-openclaw-node](https://github.com/openclaw/esp-openclaw-node) (upstream commit `38c5ab2f`) with local modifications. It retains its [Apache-2.0 license](firmware/esp-openclaw-node/LICENSE); see its [SNAPSHOT.md](firmware/esp-openclaw-node/SNAPSHOT.md) and the [change inventory](docs/openclaw-integration.md). The snapshot includes the upstream custom trusted-root bundle under `firmware/esp-openclaw-node/certificates/`. Registry dependencies retain their respective licenses; a source repository is not a license grant for upstream names, logos, or trademarks.
 
 ---
 

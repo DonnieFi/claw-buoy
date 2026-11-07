@@ -71,6 +71,6 @@ direct_dependencies:
 - espressif/libsodium
 - idf
 - lvgl/lvgl
-manifest_hash: 7a55d643bde9f605e54804652e9bd9bb794b513542a662afa216507ec5974385
+manifest_hash: b9947514bcfb9800391969dc3ff0d7f40469a88089c9f841368680a70eda84d9
 target: esp32
 version: 2.0.0

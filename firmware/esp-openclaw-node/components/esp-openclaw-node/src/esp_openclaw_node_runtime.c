@@ -39,10 +39,6 @@ void esp_openclaw_node_complete_connect_failed(
         ? "node"
         : node->config.role != NULL && strcmp(node->config.role, "operator") == 0
             ? "operator" : "other";
-    ESP_LOGW(
-        ESP_OPENCLAW_NODE_TAG,
-        "connect_diag stage=failed role=%s reason=%d local_err=%d(%s)",
-        role, (int)reason, (int)local_err, esp_err_to_name(local_err));
     esp_openclaw_node_cleanup_transport_instance(node, stop_client);
     esp_openclaw_node_lock_state(node);
     if (node->state == ESP_OPENCLAW_NODE_INTERNAL_DESTROYING ||
@@ -50,9 +46,26 @@ void esp_openclaw_node_complete_connect_failed(
         esp_openclaw_node_unlock_state(node);
         return;
     }
+    if (esp_openclaw_node_active_connect_cancelled_locked(node)) {
+        reason = ESP_OPENCLAW_NODE_CONNECT_FAILURE_CANCELED;
+        local_err = ESP_OK;
+        gateway_detail_code = NULL;
+    }
+    if (node->active_connect_attempt_id != 0 &&
+        node->connect_attempt.id == node->active_connect_attempt_id &&
+        node->connect_attempt.state == ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_CONNECTING) {
+        node->connect_attempt.state = ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_FAILED;
+        node->connect_attempt.failure_reason = reason;
+        node->connect_attempt.local_err = local_err;
+    }
+    node->active_connect_attempt_id = 0;
     node->state = ESP_OPENCLAW_NODE_INTERNAL_IDLE;
     esp_openclaw_node_clear_pending_control_locked(node);
     esp_openclaw_node_unlock_state(node);
+    ESP_LOGW(
+        ESP_OPENCLAW_NODE_TAG,
+        "connect_diag stage=failed role=%s reason=%d local_err=%d(%s)",
+        role, (int)reason, (int)local_err, esp_err_to_name(local_err));
     esp_openclaw_node_emit_connect_failed(
         node,
         reason,
@@ -76,6 +89,7 @@ void esp_openclaw_node_complete_disconnected(
         esp_openclaw_node_unlock_state(node);
         return;
     }
+    node->active_connect_attempt_id = 0;
     node->state = ESP_OPENCLAW_NODE_INTERNAL_IDLE;
     esp_openclaw_node_clear_pending_control_locked(node);
     esp_openclaw_node_unlock_state(node);
@@ -84,6 +98,19 @@ void esp_openclaw_node_complete_disconnected(
         "DISCONNECTED",
         "Gateway connection closed");
     esp_openclaw_node_emit_disconnected(node, reason, local_err);
+}
+
+bool esp_openclaw_node_cancel_active_connect_if_requested(esp_openclaw_node_handle_t node)
+{
+    esp_openclaw_node_lock_state(node);
+    bool cancel = node->state == ESP_OPENCLAW_NODE_INTERNAL_CONNECTING &&
+        esp_openclaw_node_active_connect_cancelled_locked(node);
+    esp_openclaw_node_unlock_state(node);
+    if (cancel) {
+        esp_openclaw_node_complete_connect_failed(
+            node, ESP_OPENCLAW_NODE_CONNECT_FAILURE_CANCELED, ESP_OK, NULL, true);
+    }
+    return cancel;
 }
 
 void esp_openclaw_node_fail_if_connect_timed_out(esp_openclaw_node_handle_t node)
@@ -160,6 +187,40 @@ static void complete_transport_event_state_after_disconnect_locked(
     node->client_started = false;
 }
 
+static bool cancel_connect_request_before_start(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_work_message_t *message)
+{
+    esp_openclaw_node_lock_state(node);
+    bool cancel = message->connect_attempt_id != 0 &&
+        message->connect_attempt_id == node->connect_attempt.id &&
+        esp_openclaw_node_connect_attempt_cancelled_locked(node, message->connect_attempt_id) &&
+        node->state != ESP_OPENCLAW_NODE_INTERNAL_DESTROYING &&
+        node->state != ESP_OPENCLAW_NODE_INTERNAL_CLOSED;
+    esp_openclaw_node_unlock_state(node);
+    if (!cancel) {
+        return false;
+    }
+    /* The previous connection still belongs to its original attempt. Only
+     * discard this queued source before publishing its terminal result. */
+    esp_openclaw_node_clear_connect_source_struct(&message->connect_source);
+    esp_openclaw_node_lock_state(node);
+    if (node->state == ESP_OPENCLAW_NODE_INTERNAL_DESTROYING ||
+        node->state == ESP_OPENCLAW_NODE_INTERNAL_CLOSED) {
+        esp_openclaw_node_unlock_state(node);
+        return true;
+    }
+    node->connect_attempt.state = ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_FAILED;
+    node->connect_attempt.failure_reason = ESP_OPENCLAW_NODE_CONNECT_FAILURE_CANCELED;
+    node->connect_attempt.local_err = ESP_OK;
+    node->connect_request_pending = false;
+    esp_openclaw_node_clear_pending_control_locked(node);
+    esp_openclaw_node_unlock_state(node);
+    esp_openclaw_node_emit_connect_failed(
+        node, ESP_OPENCLAW_NODE_CONNECT_FAILURE_CANCELED, ESP_OK, NULL);
+    return true;
+}
+
 static void handle_request_connect(
     esp_openclaw_node_handle_t node,
     esp_openclaw_node_work_message_t *message)
@@ -170,6 +231,15 @@ static void handle_request_connect(
         state == ESP_OPENCLAW_NODE_INTERNAL_CLOSED) {
         esp_openclaw_node_unlock_state(node);
         return;
+    }
+    if (message->connect_attempt_id != 0 &&
+        node->connect_attempt.id == message->connect_attempt_id) {
+        if (esp_openclaw_node_connect_attempt_cancelled_locked(node, message->connect_attempt_id)) {
+            esp_openclaw_node_unlock_state(node);
+            (void)cancel_connect_request_before_start(node, message);
+            return;
+        }
+        node->connect_attempt.state = ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_CONNECTING;
     }
     if (state != ESP_OPENCLAW_NODE_INTERNAL_IDLE) {
         /* Saved-session requests are reconnect-loop traffic: reserved
@@ -206,15 +276,30 @@ static void handle_request_connect(
             return;
         }
     }
+    if (message->connect_attempt_id != 0 &&
+        message->connect_attempt_id == node->connect_attempt.id &&
+        esp_openclaw_node_connect_attempt_cancelled_locked(node, message->connect_attempt_id)) {
+        esp_openclaw_node_unlock_state(node);
+        (void)cancel_connect_request_before_start(node, message);
+        return;
+    }
     esp_openclaw_node_clear_pending_control_locked(node);
     esp_openclaw_node_move_connect_source_struct(
         &node->active_connect_source,
         &message->connect_source);
+    node->connect_request_pending = false;
+    node->active_connect_attempt_id = message->connect_attempt_id;
     node->state = ESP_OPENCLAW_NODE_INTERNAL_CONNECTING;
     node->connect_started_ms = esp_timer_get_time() / 1000LL;
     esp_openclaw_node_unlock_state(node);
 
+    if (esp_openclaw_node_cancel_active_connect_if_requested(node)) {
+        return;
+    }
     esp_err_t err = esp_openclaw_node_start_transport_for_active_source(node);
+    if (esp_openclaw_node_cancel_active_connect_if_requested(node)) {
+        return;
+    }
     if (err != ESP_OK) {
         esp_openclaw_node_complete_connect_failed(
             node,
@@ -267,6 +352,7 @@ static void handle_request_gateway(
 {
     esp_openclaw_node_send_gateway_request(
         node,
+        message->transport_id,
         message->method,
         message->params_json,
         message->request_cb,
@@ -437,6 +523,7 @@ static bool process_work_message(
     esp_openclaw_node_handle_t node,
     esp_openclaw_node_work_message_t *message)
 {
+    (void)esp_openclaw_node_cancel_active_connect_if_requested(node);
     switch (message->type) {
     case ESP_OPENCLAW_NODE_WORK_MSG_REQUEST_CONNECT:
         handle_request_connect(node, message);
@@ -498,6 +585,7 @@ void esp_openclaw_node_task(void *arg)
         }
         esp_openclaw_node_work_message_t message = {0};
         if (xQueueReceive(node->work_queue, &message, ESP_OPENCLAW_NODE_TASK_POLL_TICKS) != pdTRUE) {
+            (void)esp_openclaw_node_cancel_active_connect_if_requested(node);
             esp_openclaw_node_fail_if_connect_timed_out(node);
             continue;
         }
@@ -545,38 +633,61 @@ static esp_err_t submit_pending_request(
 
 esp_err_t esp_openclaw_node_submit_connect_request(
     esp_openclaw_node_handle_t node,
-    esp_openclaw_node_connect_request_source_t *connect_source)
+    esp_openclaw_node_connect_request_source_t *connect_source,
+    esp_openclaw_node_connect_lease_t lease,
+    uint64_t generation,
+    esp_openclaw_node_connect_attempt_id_t *out_attempt,
+    esp_openclaw_node_connect_authorize_t authorize,
+    void *context)
 {
     esp_openclaw_node_lock_state(node);
-    esp_err_t err =
-        esp_openclaw_node_reserve_connect_request_locked(node, connect_source);
-    esp_openclaw_node_unlock_state(node);
+    esp_err_t err = !node->connect_request_pending &&
+        !esp_openclaw_node_connect_authority_pending_locked(node) &&
+        !esp_openclaw_node_connect_cancel_pending_locked(node) &&
+        (out_attempt == NULL || node->next_connect_attempt_id != UINT64_MAX) &&
+        esp_openclaw_node_connect_lease_matches_locked(node, lease, generation)
+        ? esp_openclaw_node_reserve_connect_request_locked(node, connect_source)
+        : ESP_ERR_INVALID_STATE;
     if (err != ESP_OK) {
+        esp_openclaw_node_unlock_state(node);
         return err;
     }
-
     esp_openclaw_node_work_message_t message = {
         .type = ESP_OPENCLAW_NODE_WORK_MSG_REQUEST_CONNECT,
+        .connect_attempt_id = out_attempt != NULL ? node->next_connect_attempt_id + 1 : 0,
     };
-    esp_openclaw_node_move_connect_source_struct(
-        &message.connect_source,
-        connect_source);
+    esp_openclaw_node_move_connect_source_struct(&message.connect_source, connect_source);
 
-    err = submit_pending_request(
-        node,
-        &message,
-        ESP_OPENCLAW_NODE_PENDING_CONTROL_REQUEST_CONNECT,
-        ESP_OPENCLAW_NODE_PENDING_CONTROL_REQUEST_NONE);
-    if (err != ESP_OK) {
-        return err;
+    /* Queue admission is nonblocking. Publish the matching snapshot under the
+     * same lock before the worker can start, without replacing a previous
+     * result when queue admission fails. */
+    err = esp_openclaw_node_enqueue_work_message(node, &message);
+    if (err == ESP_OK) {
+        node->connect_request_pending = true;
+        if (out_attempt != NULL) {
+            node->next_connect_attempt_id = message.connect_attempt_id;
+            node->connect_attempt = (esp_openclaw_node_connect_attempt_t){
+                .id = message.connect_attempt_id,
+                .state = ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_QUEUED,
+            };
+            node->connect_authorize = authorize;
+            node->connect_authorize_context = context;
+            *out_attempt = message.connect_attempt_id;
+        }
+    } else {
+        esp_openclaw_node_clear_pending_control_locked(node);
     }
-    return ESP_OK;
+    esp_openclaw_node_unlock_state(node);
+    return err;
 }
 
-static esp_err_t reserve_disconnect_request_locked(esp_openclaw_node_handle_t node)
+static esp_err_t reserve_disconnect_request_locked(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease)
 {
-    if (node->state == ESP_OPENCLAW_NODE_INTERNAL_DESTROYING ||
-        node->state == ESP_OPENCLAW_NODE_INTERNAL_CLOSED) {
+    if (node->connect_request_pending || esp_openclaw_node_connect_cancel_pending_locked(node) ||
+        !esp_openclaw_node_connect_lease_matches_locked(
+            node, lease, node->connect_lease_generation)) {
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -596,10 +707,12 @@ static esp_err_t reserve_disconnect_request_locked(esp_openclaw_node_handle_t no
     return ESP_OK;
 }
 
-esp_err_t esp_openclaw_node_submit_disconnect_request(esp_openclaw_node_handle_t node)
+esp_err_t esp_openclaw_node_submit_disconnect_request(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease)
 {
     esp_openclaw_node_lock_state(node);
-    esp_err_t err = reserve_disconnect_request_locked(node);
+    esp_err_t err = reserve_disconnect_request_locked(node, lease);
     esp_openclaw_node_unlock_state(node);
     if (err != ESP_OK) {
         return err;
@@ -621,6 +734,7 @@ esp_err_t esp_openclaw_node_submit_disconnect_request(esp_openclaw_node_handle_t
 
 esp_err_t esp_openclaw_node_submit_gateway_request(
     esp_openclaw_node_handle_t node,
+    uint32_t connection_id,
     const char *method,
     const char *params_json,
     esp_openclaw_node_gateway_request_cb_t callback,
@@ -628,7 +742,10 @@ esp_err_t esp_openclaw_node_submit_gateway_request(
 {
     esp_openclaw_node_lock_state(node);
     bool ready = node->state == ESP_OPENCLAW_NODE_INTERNAL_READY &&
-                 node->pending_control == ESP_OPENCLAW_NODE_PENDING_CONTROL_REQUEST_NONE;
+                 node->pending_control == ESP_OPENCLAW_NODE_PENDING_CONTROL_REQUEST_NONE &&
+                 node->active_transport_id != 0 &&
+                 (connection_id == 0 || connection_id == node->active_transport_id);
+    uint32_t transport_id = node->active_transport_id;
     esp_openclaw_node_unlock_state(node);
     if (!ready) {
         return ESP_ERR_INVALID_STATE;
@@ -636,6 +753,7 @@ esp_err_t esp_openclaw_node_submit_gateway_request(
 
     esp_openclaw_node_work_message_t message = {
         .type = ESP_OPENCLAW_NODE_WORK_MSG_REQUEST_GATEWAY,
+        .transport_id = transport_id,
         .method = esp_openclaw_node_duplicate_string(method),
         .params_json = esp_openclaw_node_duplicate_string(
             params_json != NULL ? params_json : "{}"),

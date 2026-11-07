@@ -22,6 +22,16 @@ cumulatively before buffer growth. Oversize or malformed continuation ordering
 closes only the affected transport and reports `ESP_ERR_INVALID_SIZE` through
 `CONNECT_FAILED` during handshake or `DISCONNECTED` after the session is ready.
 
+During connection, the SDK validates the complete JSON frame before retaining
+only the fields used for the challenge, response correlation, authentication,
+role-token handoff and plugin surface URLs. Unused initial snapshots and feature
+catalogs do not consume a second allocation as a JSON tree. Handshake JSON is
+limited to 64 nested containers; the transport's frame-size limit still applies.
+Connected RPC and event payloads continue to use the ordinary JSON parser.
+All received JSON strings must contain valid UTF-8 and fit the SDK's C-string
+representation. Embedded NUL escapes are rejected before parsing and payload
+reserialization, so identifiers cannot silently lose their suffixes.
+
 ## Contents
 
 - [Requirements](#requirements)
@@ -104,7 +114,70 @@ successful `hello-ok`
 
 - `esp_openclaw_node_request_connect()`
 - `esp_openclaw_node_request_disconnect()`
+- `esp_openclaw_node_connect_lease_acquire()` / `esp_openclaw_node_connect_lease_release()`
+- `esp_openclaw_node_request_connect_with_lease()` / `esp_openclaw_node_request_disconnect_with_lease()`
+- `esp_openclaw_node_connect_begin()` / `esp_openclaw_node_connect_snapshot()`
+- `esp_openclaw_node_connect_cancel()`
 - `esp_openclaw_node_gateway_request()`
+- `esp_openclaw_node_gateway_request_on_connection()`
+
+Queued Gateway RPCs stay bound to the connection that accepted them. A
+disconnect or reconnect before transmission completes the request with
+`STALE_CONNECTION`; it is never replayed on the replacement connection, even
+when the Gateway URI is unchanged. A request already transmitted completes
+normally or fails with `DISCONNECTED` when its connection closes.
+
+For work queued by the application, capture
+`esp_openclaw_node_get_connection_id()` while the request is authorized and
+pass it to `esp_openclaw_node_gateway_request_on_connection()`. A zero ID means
+no connection is ready. A replaced connection is rejected before submission;
+the callback runs only when submission succeeds. IDs are scoped to one node
+handle and identify transport lifetimes, not Gateway identities.
+
+A locally confirmed setup session can acquire a connection-control lease while
+the client is idle or ready with no pending control request. Acquisition preserves
+the current connection. Until release, ordinary connect/disconnect calls,
+including saved-session reconnect, are rejected with `ESP_ERR_INVALID_STATE`.
+The owner uses the matching `_with_lease` APIs; released or superseded IDs are
+rejected. Ownership is checked again after request preparation and NVS loading.
+
+Release is allowed only when connection control is settled (idle or ready, with
+no queued request). The application must then wake its suppressed reconnect
+worker explicitly: a rejected request produces no terminal event. Leases govern
+admission, not result correlation or local confirmation, and do not change the
+existing events. The disconnect API still cannot cancel a connect request before
+the component task dequeues it. A setup adapter must not treat an unrelated
+terminal event from the replaced connection as its own result.
+
+For a correlated setup outcome, call `esp_openclaw_node_connect_begin()` with
+that lease and retain the returned attempt ID. `esp_openclaw_node_connect_snapshot()`
+reports queued, connecting, succeeded, or failed for that exact ID. An old
+connection's failure, disconnect, or late handshake cannot complete its queued
+replacement. Success records the connection ID after the handshake and session
+store finish; it remains a successful attempt even if that link later drops.
+
+Only the latest tracked request is retained per node and it is cleared when a
+new lease is acquired. A newer tracked request makes an older ID return
+`ESP_ERR_NOT_FOUND`; rejected admission preserves the previous record. `credentials_saved` records a successful current-role or
+handoff token store and remains true if a later stage fails. False does not
+prove that a failed storage write had no effect. The snapshot contains no
+credentials, Gateway messages, or unbounded strings. Release still requires
+settled control, and a failed result does not itself end the setup lease.
+
+Use `esp_openclaw_node_connect_cancel()` for an exact tracked request, including
+one still waiting in the work queue. Cancellation does not need a free queue
+slot. The snapshot sets `cancel_requested` but remains queued or connecting
+until the node worker discards its credentials or stops its transport. During
+that interval, replacement requests and disconnect requests are rejected.
+Repeated cancellation is harmless; old IDs, stale leases and already-terminal
+attempts are rejected.
+
+Cancelling before the worker starts the request preserves the previous link.
+Once replacement begins, cancellation cannot restore that link. The worker
+checks cancellation before each credential write; accepted cancellation prevents
+later writes, while an earlier completed write remains visible through
+`credentials_saved`. A blocked startup or cleanup must return before cancellation
+can finish. Wait for `FAILED` with reason `CANCELED` before releasing the lease.
 
 ### Inspection
 
@@ -294,6 +367,12 @@ Because handlers run on the component task, long-running work should be handed
 off to another task if it cannot complete quickly.
 
 ## Connect and Session Model
+
+An application can narrow its next connection request with
+`esp_openclaw_node_unregister_scope(node, "operator.write")` while the client
+is idle and has no pending connect or disconnect request. Removing a missing
+scope succeeds. This only changes the locally advertised scopes; it does not
+revoke previously approved Gateway scopes or alter the saved credential.
 
 ### Connect Model
 
@@ -761,3 +840,30 @@ at a time.
 
 Component tests live under  
 [components/esp-openclaw-node/test_apps](./test_apps/README.md).
+
+Run `python3 components/esp-openclaw-node/tests/run_connect_lease_host_tests.py`
+from the repository root for the sanitized host admission tests. They execute
+the production public API and queue/worker transitions against fake platform
+boundaries; on-device transport timing remains separate qualification.
+
+### Live authority for setup requests
+
+Use `esp_openclaw_node_connect_begin_authorized` when authority can expire or
+be revoked while a request is queued or connecting. The node worker calls the
+supplied authorizer before replacing the old link, starting the transport,
+sending the connect handshake, and writing role tokens. It rechecks after
+blocking preparation. Denial latches the existing cancellation path; restoring
+authority cannot revive the request. Earlier completed writes remain visible in
+`credentials_saved`. While the authorized request is pending, new connect
+requests are rejected; cancel or disconnect it and wait for completion first.
+
+The callback runs under the node state mutex. It must be bounded, thread-safe,
+and read current peer/deadline state without calling node or serialized
+UI/setup APIs. Keep its context alive until the matching request is terminal
+or the node is destroyed. The existing setup-session object is not thread-safe;
+do not call its APIs from this callback. Local setup exit must also call
+`connect_cancel` promptly. An already-started operation can finish before
+revocation is observed; cancellation does not undo a remote grant or saved token.
+
+This API is a lifecycle boundary for the forthcoming setup binding. No BLE
+endpoint or Watch/Dial setup screen invokes it yet.

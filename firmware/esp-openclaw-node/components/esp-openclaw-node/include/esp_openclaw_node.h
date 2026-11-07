@@ -32,6 +32,9 @@ extern "C" {
 /** @brief Opaque handle for an OpenClaw Node instance. */
 typedef struct esp_openclaw_node *esp_openclaw_node_handle_t;
 
+/** @brief Per-node connection-control lease; zero is never a valid lease. */
+typedef uint64_t esp_openclaw_node_connect_lease_t;
+
 /** @brief Generic Gateway event delivered after the authenticated session is ready. */
 typedef void (*esp_openclaw_node_gateway_event_cb_t)(
     esp_openclaw_node_handle_t node,
@@ -70,6 +73,27 @@ typedef enum {
     ESP_OPENCLAW_NODE_CONNECT_FAILURE_SESSION_FINALIZATION_FAILED, /**< `hello-ok` handling failed after initial auth acceptance. */
     ESP_OPENCLAW_NODE_CONNECT_FAILURE_CANCELED,                    /**< The attempt was canceled by a local disconnect or a superseding explicit connect request. */
 } esp_openclaw_node_connect_failure_reason_t;
+
+/** @brief Per-node identifier for one accepted tracked connect request. */
+typedef uint64_t esp_openclaw_node_connect_attempt_id_t;
+
+typedef enum {
+    ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_QUEUED = 0,
+    ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_CONNECTING,
+    ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_SUCCEEDED,
+    ESP_OPENCLAW_NODE_CONNECT_ATTEMPT_FAILED,
+} esp_openclaw_node_connect_attempt_state_t;
+
+/** @brief Credential-free snapshot of the latest tracked connect request. */
+typedef struct {
+    esp_openclaw_node_connect_attempt_id_t id;
+    esp_openclaw_node_connect_attempt_state_t state;
+    uint32_t connection_id; /**< Nonzero only after this request succeeds. */
+    esp_openclaw_node_connect_failure_reason_t failure_reason; /**< Valid when failed. */
+    esp_err_t local_err; /**< Valid when failed. */
+    bool credentials_saved; /**< This attempt successfully stored a role token. */
+    bool cancel_requested; /**< Intent only; wait for a terminal state before releasing ownership. */
+} esp_openclaw_node_connect_attempt_t;
 
 /** @brief Payload for @ref ESP_OPENCLAW_NODE_EVENT_CONNECT_FAILED. */
 typedef struct {
@@ -327,6 +351,18 @@ esp_err_t esp_openclaw_node_register_scope(
     const char *scope);
 
 /**
+ * @brief Remove a locally advertised scope while this client is idle.
+ *
+ * Returns ESP_OK even if the scope was not registered. Returns
+ * ESP_ERR_INVALID_STATE while connected, connecting, disconnecting, or closing.
+ * This changes future connection requests; it does not revoke Gateway grants
+ * or modify the saved credential.
+ */
+esp_err_t esp_openclaw_node_unregister_scope(
+    esp_openclaw_node_handle_t node,
+    const char *scope);
+
+/**
  * @brief Register a handler for one OpenClaw command.
  *
  * @param[in] node Node handle.
@@ -350,6 +386,36 @@ esp_err_t esp_openclaw_node_register_command_v2(
     const esp_openclaw_node_command_v2_t *command);
 
 /* Async Request APIs */
+
+/**
+ * @brief Reserve connection control for a locally authorized setup session.
+ *
+ * Acquisition leaves the current connection unchanged. It requires an idle or
+ * ready client with no queued control request and no existing lease. Until
+ * release, ordinary connect/disconnect calls (including saved reconnect) return
+ * ESP_ERR_INVALID_STATE. Only calls carrying this lease may change connection
+ * control. Leases are local ownership IDs, not authentication credentials.
+ *
+ * Returns ESP_ERR_INVALID_ARG for NULL arguments, or ESP_ERR_INVALID_STATE when
+ * busy, destroying, or the per-node ID space is exhausted. Clears *out_lease on
+ * failure. The handle must remain alive throughout the lease.
+ */
+esp_err_t esp_openclaw_node_connect_lease_acquire(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t *out_lease);
+
+/**
+ * @brief Release the matching lease without changing the current connection.
+ *
+ * Release requires idle/ready state and no queued control request. It returns
+ * ESP_ERR_INVALID_STATE for stale leases or pending connection work, and
+ * ESP_ERR_INVALID_ARG for NULL node or zero lease. After ESP_OK, the application
+ * must wake any automatic reconnect owner it suppressed during setup; rejected
+ * requests have no terminal event. Destroy does not require lease release.
+ */
+esp_err_t esp_openclaw_node_connect_lease_release(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease);
 
 /**
  * @brief Request one connect attempt using an explicit caller-chosen source.
@@ -392,6 +458,100 @@ esp_err_t esp_openclaw_node_request_connect(
     esp_openclaw_node_handle_t node,
     const esp_openclaw_node_connect_request_t *request);
 
+/** @brief Submit a connect request under the matching nonzero control lease.
+ * Uses the same admission and terminal-event rules as request_connect().
+ * A stale lease returns ESP_ERR_INVALID_STATE, including after release.
+ */
+esp_err_t esp_openclaw_node_request_connect_with_lease(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease,
+    const esp_openclaw_node_connect_request_t *request);
+
+/**
+ * @brief Submit a tracked connect request under the matching control lease.
+ *
+ * Returns the accepted request ID in out_attempt; clears it on rejection.
+ * Admission and events match request_connect_with_lease(). A queued request is
+ * not yet connected. Use connect_snapshot() for its correlated outcome, not an
+ * untagged event from the replaced connection. No attempt ID is reused within
+ * a node lifetime; exhaustion returns ESP_ERR_INVALID_STATE.
+ */
+esp_err_t esp_openclaw_node_connect_begin(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease,
+    const esp_openclaw_node_connect_request_t *request,
+    esp_openclaw_node_connect_attempt_id_t *out_attempt);
+
+/** @brief Check current authority on the node worker, under its state mutex.
+ * Must be bounded, thread-safe, and must not call node or serialized UI/setup
+ * APIs. Read current revocation/deadline state, not a cached admission result.
+ * Context must remain alive until the tracked attempt is terminal or the node
+ * is destroyed. No callback runs after that attempt becomes terminal.
+ */
+typedef bool (*esp_openclaw_node_connect_authorize_t)(void *context);
+
+/**
+ * @brief Begin a tracked request with live authorization at each side effect.
+ *
+ * Checks authority before replacing the old link, starting the transport,
+ * sending the connect handshake, and saving role tokens. Rechecks after
+ * blocking preparation. A false result latches cancellation; later true
+ * results cannot revive the attempt. Completion uses FAILED/CANCELED after
+ * cleanup, preserving any earlier credential writes. An operation already
+ * started may finish before revocation is observed; there is no rollback.
+ *
+ * Until terminal completion, new connect requests are rejected so the active
+ * authorizer cannot be displaced. Cancel/disconnect can still stop the request.
+ * Admission copies the callback/context but does not invoke it. All other
+ * admission and snapshot rules match connect_begin(). authorize is required.
+ */
+esp_err_t esp_openclaw_node_connect_begin_authorized(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease,
+    const esp_openclaw_node_connect_request_t *request,
+    esp_openclaw_node_connect_authorize_t authorize,
+    void *context,
+    esp_openclaw_node_connect_attempt_id_t *out_attempt);
+
+/**
+ * @brief Copy the latest tracked result without polling or changing the link.
+ *
+ * Requires the matching live lease and a nonzero attempt ID. Returns
+ * ESP_ERR_NOT_FOUND when a newer tracked request has replaced this bounded
+ * record or a new lease has cleared it. Terminal results survive later link
+ * loss within the same lease. credentials_saved remains
+ * true after a successful role-token store, even if a later store fails; it
+ * does not claim that failed writes were rolled back. No strings or tokens are
+ * retained in this snapshot. A cancellation request remains nonterminal until
+ * the worker has discarded queued credentials or drained the active transport.
+ */
+esp_err_t esp_openclaw_node_connect_snapshot(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease,
+    esp_openclaw_node_connect_attempt_id_t attempt,
+    esp_openclaw_node_connect_attempt_t *out_status);
+
+/**
+ * @brief Request cancellation of an exact queued or connecting attempt.
+ *
+ * Requires the matching live lease. The request is sticky and independent of
+ * work-queue capacity; repeated cancellation before completion returns ESP_OK.
+ * The worker checks it between work items (at most its idle poll interval),
+ * after transport startup, and before credential writes. A blocked startup or
+ * cleanup must return before cancellation becomes terminal. Until then, the
+ * snapshot has cancel_requested set and new control requests are rejected.
+ *
+ * Cancellation before processing the request preserves the previous connection.
+ * Once replacement has started, it cannot restore that connection or roll back
+ * earlier credential writes. A completed cancellation reports FAILED/CANCELED.
+ * Returns ESP_ERR_NOT_FOUND for an old ID, ESP_ERR_INVALID_STATE for a completed
+ * attempt or stale lease, and ESP_ERR_INVALID_ARG for NULL node or zero IDs.
+ */
+esp_err_t esp_openclaw_node_connect_cancel(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease,
+    esp_openclaw_node_connect_attempt_id_t attempt);
+
 /**
  * @brief Request disconnect of the active session or cancel a connect attempt.
  *
@@ -412,12 +572,22 @@ esp_err_t esp_openclaw_node_request_connect(
  */
 esp_err_t esp_openclaw_node_request_disconnect(esp_openclaw_node_handle_t node);
 
+/** @brief Request disconnect/cancel under the matching nonzero control lease.
+ * Like request_disconnect(), this cannot cancel a still-queued control request.
+ */
+esp_err_t esp_openclaw_node_request_disconnect_with_lease(
+    esp_openclaw_node_handle_t node,
+    esp_openclaw_node_connect_lease_t lease);
+
 /**
  * @brief Send one asynchronous RPC over a ready Gateway session.
  *
  * The callback runs on the component task and must remain short and
  * non-blocking. `params_json` must contain a JSON object or may be `NULL` to
  * send an empty object. Result strings are valid only during the callback.
+ * An accepted request stays bound to that connection. If the connection is
+ * replaced before transmission, the callback fails with `STALE_CONNECTION`;
+ * the request is never replayed on the replacement connection.
  */
 esp_err_t esp_openclaw_node_gateway_request(
     esp_openclaw_node_handle_t node,
@@ -425,6 +595,28 @@ esp_err_t esp_openclaw_node_gateway_request(
     const char *params_json,
     esp_openclaw_node_gateway_request_cb_t callback,
     void *user_ctx);
+
+/**
+ * @brief Send only if the specified connection is still ready.
+ *
+ * Capture the nonzero ID with esp_openclaw_node_get_connection_id(). A stale
+ * ID returns ESP_ERR_INVALID_STATE without taking ownership of user_ctx or
+ * invoking the callback. An accepted request has the normal RPC callback
+ * contract, including STALE_CONNECTION if replaced before transmission.
+ */
+esp_err_t esp_openclaw_node_gateway_request_on_connection(
+    esp_openclaw_node_handle_t node,
+    uint32_t connection_id,
+    const char *method,
+    const char *params_json,
+    esp_openclaw_node_gateway_request_cb_t callback,
+    void *user_ctx);
+
+/** @brief Return the current ready connection ID, or zero while unavailable.
+ * The ID identifies a transport lifetime within this node handle, not a device
+ * or Gateway identity. Looking it up does not reserve the connection.
+ */
+uint32_t esp_openclaw_node_get_connection_id(esp_openclaw_node_handle_t node);
 
 /* Inspection APIs */
 

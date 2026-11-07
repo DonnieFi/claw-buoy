@@ -51,6 +51,7 @@ flash_args
 .env.*
 !.env.example
 *.pem
+!firmware/esp-openclaw-node/certificates/public-roots.pem
 *.key
 *.p12
 *.pfx
